@@ -56,47 +56,48 @@ def _stop_deployd(context):
 
 def _clean_up_marathon_apps(context):
     """If a marathon client object exists in our context, delete any apps in Marathon and wait until they die."""
-    if hasattr(context, "marathon_clients"):
-        still_apps = True
-        while still_apps:
-            still_apps = False
-            for client in context.marathon_clients.get_all_clients():
-                apps = marathon_tools.list_all_marathon_app_ids(client)
-                if apps:
-                    still_apps = True
-                else:
-                    continue
-                print(
-                    "after_scenario: Deleting %d apps to prep for the next scenario. %s"
-                    % (len(apps), ",".join(apps))
-                )
-                for app in apps:
-                    if marathon_tools.is_app_id_running(app, client):
-                        print(
-                            "after_scenario: %s does look like it is running. Scaling down and killing it..."
-                            % app
-                        )
-                        client.scale_app(app, instances=0, force=True)
-                        time.sleep(1)
-                        client.delete_app(app, force=True)
-                    else:
-                        print(
-                            "after_scenario: %s showed up in the app_list, but doesn't look like it is running?"
-                            % app
-                        )
-            time.sleep(0.5)
+    if not hasattr(context, "marathon_clients"):
+        return
+    still_apps = True
+    while still_apps:
+        still_apps = False
         for client in context.marathon_clients.get_all_clients():
-            while client.list_deployments():
-                print(
-                    "after_scenario: There are still marathon deployments in progress. sleeping."
-                )
-                time.sleep(0.5)
+            apps = marathon_tools.list_all_marathon_app_ids(client)
+            if apps:
+                still_apps = True
+            else:
+                continue
+            print(
+                "after_scenario: Deleting %d apps to prep for the next scenario. %s"
+                % (len(apps), ",".join(apps))
+            )
+            for app in apps:
+                if marathon_tools.is_app_id_running(app, client):
+                    print(
+                        f"after_scenario: {app} does look like it is running. Scaling down and killing it..."
+                    )
+
+                    client.scale_app(app, instances=0, force=True)
+                    time.sleep(1)
+                    client.delete_app(app, force=True)
+                else:
+                    print(
+                        "after_scenario: %s showed up in the app_list, but doesn't look like it is running?"
+                        % app
+                    )
+        time.sleep(0.5)
+    for client in context.marathon_clients.get_all_clients():
+        while client.list_deployments():
+            print(
+                "after_scenario: There are still marathon deployments in progress. sleeping."
+            )
+            time.sleep(0.5)
 
 
 def _clean_up_mesos_cli_config(context):
     """If a mesos cli config file was written, clean it up."""
     if hasattr(context, "mesos_cli_config_filename"):
-        print("Cleaning up %s" % context.mesos_cli_config_filename)
+        print(f"Cleaning up {context.mesos_cli_config_filename}")
         os.unlink(context.mesos_cli_config_filename)
         del context.mesos_cli_config_filename
 
@@ -104,14 +105,14 @@ def _clean_up_mesos_cli_config(context):
 def _clean_up_soa_dir(context):
     """If a yelpsoa-configs directory was written, clean it up."""
     if hasattr(context, "soa_dir"):
-        print("Cleaning up %s" % context.soa_dir)
+        print(f"Cleaning up {context.soa_dir}")
         shutil.rmtree(context.soa_dir)
         del context.soa_dir
 
 
 def _clean_up_etc_paasta(context):
     if hasattr(context, "etc_paasta"):
-        print("Cleaning up %s" % context.etc_paasta)
+        print(f"Cleaning up {context.etc_paasta}")
         shutil.rmtree(context.etc_paasta)
         del context.etc_paasta
 
@@ -120,9 +121,10 @@ def _clean_up_zookeeper_autoscaling(context):
     """If max_instances was set for autoscaling, clean up zookeeper"""
     if "max_instances" in context:
         client = KazooClient(
-            hosts="%s/mesos-testcluster" % get_service_connection_string("zookeeper"),
+            hosts=f'{get_service_connection_string("zookeeper")}/mesos-testcluster',
             read_only=True,
         )
+
         client.start()
         try:
             client.delete("/autoscaling", recursive=True)
@@ -143,7 +145,7 @@ def _clean_up_paasta_native_frameworks(context):
             if framework.name.startswith("paasta_native ") or framework.name == getattr(
                 context, "framework_name", ""
             ):
-                print("cleaning up framework %s" % framework.name)
+                print(f"cleaning up framework {framework.name}")
                 try:
                     mesos_tools.terminate_framework(framework.id)
                 except requests.exceptions.HTTPError as e:

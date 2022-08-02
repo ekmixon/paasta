@@ -40,9 +40,7 @@ class MesosSlave:
 
     @property
     def host(self):
-        return "{}://{}:{}".format(
-            self.config["scheme"], self["hostname"], self["pid"].split(":")[-1]
-        )
+        return f'{self.config["scheme"]}://{self["hostname"]}:{self["pid"].split(":")[-1]}'
 
     async def fetch(self, url, **kwargs) -> aiohttp.ClientResponse:
         headers = {"User-Agent": get_user_agent()}
@@ -86,9 +84,7 @@ class MesosSlave:
             return []
 
         resp = self.fetch("/files/browse.json", params={"path": path})
-        if resp.status_code == 404:
-            return []
-        return await resp.json()
+        return [] if resp.status_code == 404 else await resp.json()
 
     def file(self, task, path):
         return mesos_file.File(self, task, path)
@@ -104,10 +100,7 @@ class MesosSlave:
         stats = list(filter(lambda x: x["executor_id"] == _id, await self.stats()))
 
         # Tasks that are not yet in a RUNNING state have no stats.
-        if len(stats) == 0:
-            return {}
-        else:
-            return stats[0]["statistics"]
+        return stats[0]["statistics"] if stats else {}
 
     @property  # type: ignore
     @util.memoize

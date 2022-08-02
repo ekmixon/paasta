@@ -81,4 +81,4 @@ def perform_performance_check(args):
             "Something went wrong with the performance check. Safely bailing. No need to panic."
         )
         print("Here was the error:")
-        print(str(e))
+        print(e)

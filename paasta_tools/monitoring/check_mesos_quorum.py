@@ -20,7 +20,7 @@ from paasta_tools.metrics.metastatus_lib import assert_quorum_size
 def check_mesos_quorum():
     result = assert_quorum_size()
     if result.healthy:
-        print("OK: " + result.message)
+        print(f"OK: {result.message}")
         sys.exit(0)
     else:
         print(result.message)

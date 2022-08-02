@@ -87,10 +87,7 @@ class ServiceNamespaceConfig(dict):
         if no healthcheck_mode is specified.
         """
         healthcheck_mode = self.get("healthcheck_mode", None)
-        if not healthcheck_mode:
-            return self.get_mode()
-        else:
-            return healthcheck_mode
+        return healthcheck_mode or self.get_mode()
 
     def get_mode(self) -> str:
         """Get the mode that the service runs in and check that we support it.
@@ -101,14 +98,11 @@ class ServiceNamespaceConfig(dict):
         """
         mode = self.get("mode", None)
         if mode is None:
-            if not self.is_in_smartstack():
-                return None
-            else:
-                return "http"
+            return "http" if self.is_in_smartstack() else None
         elif mode in ["http", "tcp", "https"]:
             return mode
         else:
-            raise InvalidSmartstackMode("Unknown mode: %s" % mode)
+            raise InvalidSmartstackMode(f"Unknown mode: {mode}")
 
     def get_healthcheck_uri(self) -> str:
         return self.get("healthcheck_uri", "/status")
@@ -117,10 +111,7 @@ class ServiceNamespaceConfig(dict):
         return self.get("discover", "region")
 
     def is_in_smartstack(self) -> bool:
-        if self.get("proxy_port") is not None:
-            return True
-        else:
-            return False
+        return self.get("proxy_port") is not None
 
 
 class LongRunningServiceConfig(InstanceConfig):
@@ -181,10 +172,7 @@ class LongRunningServiceConfig(InstanceConfig):
 
         :param service_config: The service instance's configuration dictionary
         :returns: The drain method specified in the config, or 'noop' if not specified"""
-        default = "noop"
-        # Default to hacheck draining if the service is in smartstack
-        if service_namespace_config.is_in_smartstack():
-            default = "hacheck"
+        default = "hacheck" if service_namespace_config.is_in_smartstack() else "noop"
         return self.config_dict.get("drain_method", default)
 
     def get_drain_method_params(
@@ -206,9 +194,9 @@ class LongRunningServiceConfig(InstanceConfig):
     def get_registrations(self) -> List[str]:
         for registration in self.get_invalid_registrations():
             log.error(
-                "Provided registration {} for service "
-                "{} is invalid".format(registration, self.service)
+                f"Provided registration {registration} for service {self.service} is invalid"
             )
+
 
         registrations = self.config_dict.get("registrations", [])
 
@@ -284,7 +272,7 @@ class LongRunningServiceConfig(InstanceConfig):
         if mode is None:
             mode = service_namespace_config.get_healthcheck_mode()
         elif mode not in ["http", "https", "tcp", "cmd", None]:
-            raise InvalidHealthcheckMode("Unknown mode: %s" % mode)
+            raise InvalidHealthcheckMode(f"Unknown mode: {mode}")
         return mode
 
     def get_bounce_start_deadline(self) -> float:
@@ -301,12 +289,12 @@ class LongRunningServiceConfig(InstanceConfig):
             if autoscaled_instances is None:
                 return self.get_max_instances()
             else:
-                limited_instances = (
+                return (
                     self.limit_instance_count(autoscaled_instances)
                     if with_limit
                     else autoscaled_instances
                 )
-                return limited_instances
+
         else:
             instances = self.config_dict.get("instances", 1)
             log.debug("Autoscaling not enabled, returning %d instances" % instances)
@@ -333,9 +321,8 @@ class LongRunningServiceConfig(InstanceConfig):
                   """
         if self.get_desired_state() == "start":
             return self.get_instances()
-        else:
-            log.debug("Instance is set to stop. Returning '0' instances")
-            return 0
+        log.debug("Instance is set to stop. Returning '0' instances")
+        return 0
 
     def limit_instance_count(self, instances: int) -> int:
         """
@@ -358,8 +345,7 @@ class LongRunningServiceConfig(InstanceConfig):
 
     def validate(self, params: Optional[List[str]] = None,) -> List[str]:
         error_messages = super().validate(params=params)
-        invalid_registrations = self.get_invalid_registrations()
-        if invalid_registrations:
+        if invalid_registrations := self.get_invalid_registrations():
             service_instance = compose_job_id(self.service, self.instance)
             registrations_str = ", ".join(invalid_registrations)
             error_messages.append(
@@ -395,7 +381,7 @@ def get_healthcheck_for_instance(
     mode = service_manifest.get_healthcheck_mode(smartstack_config)
     hostname = socket.getfqdn()
 
-    if mode == "http" or mode == "https":
+    if mode in ["http", "https"]:
         path = service_manifest.get_healthcheck_uri(smartstack_config)
         healthcheck_command = "%s://%s:%d%s" % (mode, hostname, random_port, path)
     elif mode == "tcp":

@@ -67,23 +67,19 @@ def parse_capacity_check_options():
         help="Comma separated list of attributes to check.\n"
         "Checks combinations of attributes",
     )
-    options = parser.parse_args()
-
-    return options
+    return parser.parse_args()
 
 
 def calc_percent_usage(resource_item, value_to_check):
     values = resource_item[value_to_check]
-    if values["total"] == 0:
-        return 0
-    return 100 * (values["used"] / values["total"])
+    return 0 if values["total"] == 0 else 100 * (values["used"] / values["total"])
 
 
 def error_message(failures, level, cluster, value_to_check):
     result = f"{level} cluster {cluster} {value_to_check} usage:\n"
     results = []
     for f in failures:
-        attrs = ", ".join(["{}: {}".format(e["attr"], e["value"]) for e in f["attrs"]])
+        attrs = ", ".join([f'{e["attr"]}: {e["value"]}' for e in f["attrs"]])
         results.append(
             "    {} is at {:.2f} percent {}, maximum {:.2f} percent".format(
                 attrs, f["current"], value_to_check, f["maximum"]
@@ -99,13 +95,13 @@ def get_check_from_overrides(overrides, default_check, groupings):
     """Get the overrides dict from overrides with the same groupings as groupings,
     or return the default"""
     checks = [o for o in overrides if o["groupings"] == groupings]
-    if len(checks) == 0:
+    if not checks:
         return default_check
     elif len(checks) == 1:
         return checks[0]
     else:
         group_string = ", ".join([f"{k}: {v}" for k, v in groupings.items()])
-        print("UNKNOWN Multiple overrides specified for %s" % group_string)
+        print(f"UNKNOWN Multiple overrides specified for {group_string}")
         sys.exit(3)
 
 

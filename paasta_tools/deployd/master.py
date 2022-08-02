@@ -109,14 +109,11 @@ class DeployDaemon(PaastaThread):
             for obj in inspect.getmembers(watchers)
             if inspect.isclass(obj[1]) and obj[1].__bases__[0] == watchers.PaastaWatcher
         ]
-        enabled_watchers = [
-            x for x in watcher_classes if x.__name__ not in disabled_watchers
-        ]
-        return enabled_watchers
+        return [x for x in watcher_classes if x.__name__ not in disabled_watchers]
 
     def startup(self) -> None:
         self.is_leader = True
-        self.log.info("This node is elected as leader {}".format(socket.getfqdn()))
+        self.log.info(f"This node is elected as leader {socket.getfqdn()}")
         leader_counter = self.metrics.create_counter(
             "leader_elections", paasta_cluster=self.config.get_cluster()
         )
@@ -164,15 +161,15 @@ class DeployDaemon(PaastaThread):
             time.sleep(0.1)
 
     def all_watchers_running(self) -> bool:
-        return all([watcher.is_alive() for watcher in self.watcher_threads])
+        return all(watcher.is_alive() for watcher in self.watcher_threads)
 
     def all_workers_dead(self) -> bool:
-        return all([not worker.is_alive() for worker in self.workers])
+        return all(not worker.is_alive() for worker in self.workers)
 
     def check_and_start_workers(self) -> None:
         live_workers = len([worker for worker in self.workers if worker.is_alive()])
         number_of_dead_workers = self.config.get_deployd_number_workers() - live_workers
-        for i in range(number_of_dead_workers):
+        for _ in range(number_of_dead_workers):
             self.log.error(DEAD_DEPLOYD_WORKER_MESSAGE)
             worker_no = len(self.workers) + 1
             worker = PaastaDeployWorker(
@@ -253,9 +250,8 @@ class DeployDaemon(PaastaThread):
         for watcher in self.watcher_threads:
             watcher.start()
         self.log.info("Waiting for all watchers to start")
-        attempts = 0
-        while attempts < 120:
-            if all([watcher.is_ready for watcher in self.watcher_threads]):
+        for _ in range(120):
+            if all(watcher.is_ready for watcher in self.watcher_threads):
                 return
             self.log.info("Sleeping and waiting for watchers to all start")
             self.log.info(
@@ -268,7 +264,6 @@ class DeployDaemon(PaastaThread):
                 )
             )
             time.sleep(1)
-            attempts += 1
         self.log.error("Failed to start all the watchers, exiting...")
         sys.exit(1)
 

@@ -95,7 +95,7 @@ def paasta_mesh_status_on_api_endpoint(
             [PaastaColors.red(f"Could not connect to API: {exc.__class__.__name__}")],
         )
     except Exception as e:
-        output = [PaastaColors.red(f"Exception when talking to the API:")]
+        output = [PaastaColors.red("Exception when talking to the API:")]
         output.extend(str(e).split("\n"))
         return 1, output
 
@@ -138,7 +138,7 @@ def paasta_mesh_status(args) -> int:
         f"cluster: {args.cluster}",
         f"instance: {PaastaColors.cyan(args.instance)}",
     ]
-    output.extend(["  " + line for line in mesh_output])
+    output.extend([f"  {line}" for line in mesh_output])
     print("\n".join(output))
 
     return return_code

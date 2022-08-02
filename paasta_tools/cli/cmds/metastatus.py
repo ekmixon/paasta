@@ -159,7 +159,7 @@ def print_cluster_status(
         use_mesos_cache=use_mesos_cache,
     )
 
-    print("Cluster: %s" % cluster)
+    print(f"Cluster: {cluster}")
     print(get_cluster_dashboards(cluster))
     print(output)
     print()
@@ -168,11 +168,7 @@ def print_cluster_status(
 
 
 def figure_out_clusters_to_inspect(args, all_clusters) -> Sequence[str]:
-    if args.clusters is not None:
-        clusters_to_inspect = args.clusters.split(",")
-    else:
-        clusters_to_inspect = all_clusters
-    return clusters_to_inspect
+    return args.clusters.split(",") if args.clusters is not None else all_clusters
 
 
 def get_cluster_dashboards(cluster: str,) -> str:
@@ -182,7 +178,7 @@ def get_cluster_dashboards(cluster: str,) -> str:
         dashboards = load_system_paasta_config().get_dashboard_links()[cluster]
     except KeyError as e:
         if e.args[0] == cluster:
-            output = [PaastaColors.red("No dashboards configured for %s!" % cluster)]
+            output = [PaastaColors.red(f"No dashboards configured for {cluster}!")]
         else:
             output = [PaastaColors.red("No dashboards configured!")]
     else:
@@ -192,10 +188,9 @@ def get_cluster_dashboards(cluster: str,) -> str:
             if isinstance(urls, list):
                 urls = "\n    %s" % "\n    ".join(urls)
             output.append(
-                "  {}:{}{}".format(
-                    label, SPACER * (spacing - len(label)), PaastaColors.cyan(urls)
-                )
+                f"  {label}:{SPACER * (spacing - len(label))}{PaastaColors.cyan(urls)}"
             )
+
     return "\n".join(output)
 
 
@@ -222,4 +217,4 @@ def paasta_metastatus(args,) -> int:
         else:
             print("Cluster %s doesn't look like a valid cluster?" % args.clusters)
             print("Try using tab completion to help complete the cluster name")
-    return 0 if all([return_code == 0 for return_code in return_codes]) else 1
+    return 0 if all(return_code == 0 for return_code in return_codes) else 1

@@ -66,8 +66,7 @@ def parse_args(argv):
         ),
     )
 
-    args = parser.parse_args(argv)
-    return args
+    return parser.parse_args(argv)
 
 
 def setup_logging(verbose):
@@ -130,9 +129,7 @@ def process_inotify_event(
             log.debug(f"Updated {service_to_update}")
     except TimeoutError as e:
         log.error(
-            "Unable to update firewalls for {} because time-out obtaining flock: {}".format(
-                service_groups.keys(), e
-            )
+            f"Unable to update firewalls for {service_groups.keys()} because time-out obtaining flock: {e}"
         )
 
 

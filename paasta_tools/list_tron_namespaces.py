@@ -34,8 +34,7 @@ def parse_args():
         default=tron_tools.DEFAULT_SOA_DIR,
         help="Use a different soa config directory",
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def main():

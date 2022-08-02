@@ -76,12 +76,11 @@ def parse_args():
 
 
 def get_paasta_config(yelpsoa_config_root):
-    variables = {"proxy_port": suggest_smartstack_proxy_port(yelpsoa_config_root)}
-    return variables
+    return {"proxy_port": suggest_smartstack_proxy_port(yelpsoa_config_root)}
 
 
 def write_paasta_config(variables, template, destination):
-    print("Using cookiecutter template from %s" % template)
+    print(f"Using cookiecutter template from {template}")
     with make_copyfile_symlink_aware():
         cookiecutter(
             template=template,

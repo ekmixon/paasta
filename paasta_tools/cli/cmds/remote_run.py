@@ -47,7 +47,7 @@ ARG_DEFAULTS = dict(
         retries=0,
     ),
     stop=dict(run_id=None, framework_id=None),
-    list=dict(),
+    list={},
 )
 
 
@@ -86,13 +86,10 @@ def add_common_args_to_parser(parser):
     parser.add_argument(
         "-c",
         "--cluster",
-        help=(
-            "The name of the cluster you wish to run your task on. "
-            "If omitted, uses the default cluster defined in the paasta "
-            f"remote-run configs."
-        ),
+        help='The name of the cluster you wish to run your task on. If omitted, uses the default cluster defined in the paasta remote-run configs.',
         default=ARG_DEFAULTS["common"]["cluster"],
     ).completer = lazy_choices_completer(list_clusters)
+
     parser.add_argument(
         "-v",
         "--verbose",
@@ -182,10 +179,11 @@ def add_start_parser(subparser):
             "Email address to send remote-run notifications to. "
             "A notification will be sent when a task either succeeds or fails. "
             "Defaults to env variable $EMAIL: "
-        )
-        + (default_email if default_email else "(currently not set)"),
+            + (default_email or "(currently not set)")
+        ),
         default=default_email,
     )
+
     default_retries = ARG_DEFAULTS["start"]["retries"]
     parser.add_argument(
         "-r",
@@ -261,13 +259,12 @@ def create_remote_run_command(args):
     cmd_parts = ["/usr/bin/paasta_remote_run", args.action]
     arg_vars = vars(args)
     arg_defaults = dict(ARG_DEFAULTS[args.action])  # copy dict
-    arg_defaults.update(ARG_DEFAULTS["common"])
+    arg_defaults |= ARG_DEFAULTS["common"]
     arg_defaults.pop("constraint")  # needs conversion to json
 
-    for k in arg_vars.keys():
+    for k, v in arg_vars.items():
         if k not in arg_defaults:  # skip keys we don't know about
             continue
-        v = arg_vars[k]
         if v == arg_defaults[k]:  # skip values that have default value
             continue
         k = re.sub(r"_", "-", k)
@@ -312,6 +309,6 @@ def paasta_remote_run(args):
     # Status results are streamed. This print is for possible error messages.
     if status is not None:
         for line in status.rstrip().split("\n"):
-            print("    %s" % line)
+            print(f"    {line}")
 
     return return_code

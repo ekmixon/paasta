@@ -65,7 +65,7 @@ class request_logger_tween_factory:
                 "cluster": settings.cluster,
             }
             if additional_fields is not None:
-                dct.update(additional_fields)
+                dct |= additional_fields
             line = json.dumps(dct, sort_keys=True)
             clog.log_line(self.log_name, line)
 
@@ -95,13 +95,12 @@ class request_logger_tween_factory:
 
         except Exception as e:
             log_level = "ERROR"
-            response_fields.update(
-                {
-                    "status_code": 500,
-                    "exc_type": type(e).__name__,
-                    "exc_info": traceback.format_exc(),
-                }
-            )
+            response_fields |= {
+                "status_code": 500,
+                "exc_type": type(e).__name__,
+                "exc_info": traceback.format_exc(),
+            }
+
             raise
 
         finally:

@@ -22,8 +22,7 @@ def parse_args():
         action="store_true",
         help="Actually kill the containers. (defaults to dry-run)",
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 @a_sync.to_blocking

@@ -32,7 +32,7 @@ def interpret_task_updated(task_updated) -> str:
         if reason == "REASON_TASK_HEALTH_CHECK_STATUS_UPDATED":
             return f"Health check update: healthy={healthy}"
         elif reason is None:
-            return f"Task running, no healthchecks defined."
+            return "Task running, no healthchecks defined."
         else:
             return "Unknown: TASK_RUNNING but unrecognized status.reason"
     if state == "TASK_KILLED":
@@ -50,17 +50,19 @@ def interpret_task_updated(task_updated) -> str:
         if message == "Container exited with status 137":
             return f"Probable OOM: {message}"
         elif message is None:
-            return f"Unknown: TASK_FAILED but status.message is None. This seems to happen when a task exits very quickly on startup. Mesos usually follows up with a corrected message shortly."
+            return "Unknown: TASK_FAILED but status.message is None. This seems to happen when a task exits very quickly on startup. Mesos usually follows up with a corrected message shortly."
+
         elif message.startswith("Container exited with status "):
             return f"TASK_FAILED: {message}"
         else:
-            return f"Unknown: TASK_FAILED but unrecognized status.message"
+            return "Unknown: TASK_FAILED but unrecognized status.message"
     elif state == "TASK_FINISHED":
         if message is None:
-            return f"Unknown: TASK_FINISHED but status.message is None. This seems to happen when a task exits very quickly on startup. Mesos usually follows up with a corrected message shortly."
+            return "Unknown: TASK_FINISHED but status.message is None. This seems to happen when a task exits very quickly on startup. Mesos usually follows up with a corrected message shortly."
+
         return f"TASK_FINISHED: {message}"
     else:
-        return f"Unknown: unrecognized state"
+        return "Unknown: unrecognized state"
 
 
 class MesosEventSubscriber:
@@ -115,9 +117,7 @@ class MesosEventSubscriber:
             return True
         if framework_name.startswith("jenkins"):
             return True
-        if framework_name.startswith("paasta_spark_run"):
-            return True
-        return False
+        return bool(framework_name.startswith("paasta_spark_run"))
 
     def handler_task_updated(self, event):
         task_updated = event["task_updated"]

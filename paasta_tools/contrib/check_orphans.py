@@ -54,7 +54,7 @@ def get_zk_data(ignored_services: Set[str]) -> SmartstackData:
     zk = KazooClient(hosts=zk_hosts)
     zk.start()
 
-    logger.debug(f"pulling smartstack data from zookeeper")
+    logger.debug("pulling smartstack data from zookeeper")
     zk_data = {}
     services = zk.get_children(PREFIX)
     for service in services:
@@ -107,17 +107,13 @@ def host_to_ip(host: str, fallback: str) -> str:
     A fallback is needed because in some cases the nerve registration does not
     match an actual hostname (e.g. "prod-db15" or "prod-splunk-master").
     """
-    for match in (
-        re.match(r"^(\d+)-(\d+)-(\d+)-(\d+)-", host),
-        re.match(r"^ip-(\d+)-(\d+)-(\d+)-(\d+)", host),
-    ):
+    for match in (re.match(r"^(\d+)-(\d+)-(\d+)-(\d+)-", host), re.match(r"^ip-(\d+)-(\d+)-(\d+)-(\d+)", host)):
         if match:
             return ".".join(match.groups())
-    else:
-        try:
-            return socket.gethostbyname(host)
-        except socket.gaierror:
-            return fallback
+    try:
+        return socket.gethostbyname(host)
+    except socket.gaierror:
+        return fallback
 
 
 async def transfer_one_file(
@@ -140,14 +136,14 @@ async def transfer_one_file(
 
 
 async def gather_files(hosts: Set[str]) -> Dict[str, str]:
-    logger.info("gathering files from {} hosts".format(len(hosts)))
+    logger.info(f"gathering files from {len(hosts)} hosts")
     tasks = [transfer_one_file(host) for host in hosts]
     responses = {}
     for idx in range(0, len(tasks), CHUNK_SIZE):
         resp = await asyncio.gather(
             *tasks[idx : idx + CHUNK_SIZE], return_exceptions=True
         )
-        responses.update(dict(resp))
+        responses |= dict(resp)
     return responses
 
 
@@ -202,11 +198,12 @@ def get_instance_data(
         x for x in zk_instance_data if x[0] not in not_found_hosts
     }
 
-    logger.info("zk_instance_data (unfiltered) len: {}".format(len(zk_instance_data)))
+    logger.info(f"zk_instance_data (unfiltered) len: {len(zk_instance_data)}")
     logger.info(
-        "zk_instance_data (filtered) len: {}".format(len(zk_instance_data_filtered))
+        f"zk_instance_data (filtered) len: {len(zk_instance_data_filtered)}"
     )
-    logger.info("nerve_instance_data len: {}".format(len(nerve_instance_data)))
+
+    logger.info(f"nerve_instance_data len: {len(nerve_instance_data)}")
 
     return zk_instance_data_filtered, nerve_instance_data
 
@@ -239,15 +236,14 @@ def check_orphans(
         print("\n".join(collisions))
         return ExitCode.COLLISIONS
     elif orphans:
-        logger.warning("{} orphans found".format(len(orphans)))
+        logger.warning(f"{len(orphans)} orphans found")
         print(dict(orphans_by_host))
         return ExitCode.ORPHANS
     else:
         logger.info(
-            "No orphans found out of {} service registrations seen".format(
-                len(zk_instance_data)
-            )
+            f"No orphans found out of {len(zk_instance_data)} service registrations seen"
         )
+
         return ExitCode.OK
 
 

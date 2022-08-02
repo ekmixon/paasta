@@ -85,21 +85,19 @@ class MesosMaster:
         self.config = config
 
     def __str__(self):
-        return "<master: {}>".format(self.key())
+        return f"<master: {self.key()}>"
 
     def key(self):
         return self.config["master"]
 
     @util.CachedProperty(ttl=5)
     def host(self):
-        return "{}://{}".format(
-            self.config["scheme"], self.resolve(self.config["master"])
-        )
+        return f'{self.config["scheme"]}://{self.resolve(self.config["master"])}'
 
     @util.CachedProperty(ttl=5)
     def cache_host(self):
         host_url = urlparse(self.host)
-        replaced = host_url._replace(netloc=host_url.hostname + ":5055")
+        replaced = host_url._replace(netloc=f"{host_url.hostname}:5055")
         return replaced.geturl()
 
     async def _request(
@@ -150,7 +148,7 @@ class MesosMaster:
     @retry(KazooTimeoutError, tries=5, delay=0.5, logger=logger)
     def _zookeeper_resolver(self, cfg):
         hosts, path = cfg[5:].split("/", 1)
-        path = "/" + path
+        path = f"/{path}"
 
         retry = KazooRetry(max_tries=10)
         with zookeeper.client(
@@ -229,10 +227,9 @@ class MesosMaster:
 
         elif len(lst) > 1:
             raise exceptions.MultipleSlavesForIDError(
-                "Multiple slaves matching filter {}. {}".format(
-                    fltr, ",".join([slave.id for slave in lst])
-                )
+                f'Multiple slaves matching filter {fltr}. {",".join([slave.id for slave in lst])}'
             )
+
 
         return lst[0]
 
@@ -256,15 +253,15 @@ class MesosMaster:
 
         if len(lst) == 0:
             raise exceptions.TaskNotFoundException(
-                "Cannot find a task with filter %s" % fltr
+                f"Cannot find a task with filter {fltr}"
             )
+
 
         elif len(lst) > 1:
             raise exceptions.MultipleTasksForIDError(
-                "Multiple tasks matching filter {}. {}".format(
-                    fltr, ",".join([task.id for task in lst])
-                )
+                f'Multiple tasks matching filter {fltr}. {",".join([task.id for task in lst])}'
             )
+
         return lst[0]
 
     async def orphan_tasks(self):
@@ -295,7 +292,7 @@ class MesosMaster:
         return [framework.Framework(f) for f in await self._framework_list(active_only)]
 
     async def teardown(self, framework_id):
-        return await self.post("/master/teardown", data="frameworkId=%s" % framework_id)
+        return await self.post("/master/teardown", data=f"frameworkId={framework_id}")
 
     async def metrics_snapshot(self) -> MesosMetrics:
         return await (await self.fetch("/metrics/snapshot")).json()

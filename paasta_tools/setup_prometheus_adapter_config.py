@@ -169,14 +169,7 @@ def _minify_promql(query: str) -> str:
     This is useful for allowing us to nicely format queries in code, but minimize the size of our
     queries when they're actually sent to Prometheus by the adapter.
     """
-    trimmed_query = []
-    # while we could potentially do some regex magic, we want to ensure
-    # that we don't mess up any labels (even though they really shouldn't
-    # have any whitespace in them in the first place) - thus we just just
-    # strip any leading/trailing whitespace and leave everything else alone
-    for line in query.split("\n"):
-        trimmed_query.append(line.strip())
-
+    trimmed_query = [line.strip() for line in query.split("\n")]
     return (" ".join(trimmed_query)).strip()
 
 
@@ -188,10 +181,16 @@ def should_create_uwsgi_scaling_rule(
     Returns a 2-tuple of (should_create, reason_to_skip)
     """
     if autoscaling_config["metrics_provider"] == "uwsgi":
-        if not autoscaling_config.get("use_prometheus", DEFAULT_USE_PROMETHEUS_UWSGI):
-            return False, "requested uwsgi autoscaling, but not using Prometheus"
-
-        return True, None
+        return (
+            (True, None)
+            if autoscaling_config.get(
+                "use_prometheus", DEFAULT_USE_PROMETHEUS_UWSGI
+            )
+            else (
+                False,
+                "requested uwsgi autoscaling, but not using Prometheus",
+            )
+        )
 
     return False, "did not request uwsgi autoscaling"
 
@@ -296,10 +295,13 @@ def should_create_cpu_scaling_rule(
     Returns a 2-tuple of (should_create, reason_to_skip)
     """
     if autoscaling_config["metrics_provider"] in CPU_METRICS_PROVIDERS:
-        if not autoscaling_config.get("use_prometheus", DEFAULT_USE_PROMETHEUS_CPU):
-            return False, "requested cpu autoscaling, but not using Prometheus"
-
-        return True, None
+        return (
+            (True, None)
+            if autoscaling_config.get(
+                "use_prometheus", DEFAULT_USE_PROMETHEUS_CPU
+            )
+            else (False, "requested cpu autoscaling, but not using Prometheus")
+        )
 
     return False, "did not request cpu autoscaling"
 
@@ -600,10 +602,11 @@ def get_prometheus_adapter_configmap(
         else:
             raise
 
-    if not config:
-        return None
-
-    return yaml.safe_load(config.data[PROMETHEUS_ADAPTER_CONFIGMAP_FILENAME])
+    return (
+        yaml.safe_load(config.data[PROMETHEUS_ADAPTER_CONFIGMAP_FILENAME])
+        if config
+        else None
+    )
 
 
 def restart_prometheus_adapter(kube_client: KubeClient) -> None:

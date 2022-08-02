@@ -33,7 +33,7 @@ class Task:
         self.__items = items
 
     def __str__(self):
-        return "{}:{}".format(a_sync.block(self.slave), self["id"])
+        return f'{a_sync.block(self.slave)}:{self["id"]}'
 
     def __getitem__(self, name):
         return self.__items[name]
@@ -69,8 +69,7 @@ class Task:
 
     async def cpu_time(self):
         st = await self.stats()
-        secs = st.get("cpus_user_time_secs", 0) + st.get("cpus_system_time_secs", 0)
-        return secs
+        return st.get("cpus_user_time_secs", 0) + st.get("cpus_system_time_secs", 0)
 
     async def cpu_limit(self):
         return (await self.stats()).get("cpus_limit", 0)
@@ -86,9 +85,7 @@ class Task:
             result = self.cmd_re.search((await self.executor())["name"])
         except exceptions.MissingExecutor:
             result = None
-        if not result:
-            return "none"
-        return result.group(1)
+        return result.group(1) if result else "none"
 
     async def user(self):
         return (await self.framework()).user

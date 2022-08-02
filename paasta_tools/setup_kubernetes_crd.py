@@ -65,8 +65,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-v", "--verbose", action="store_true", dest="verbose", default=False
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def main() -> None:
@@ -125,11 +124,14 @@ def setup_kube_crd(
             spec=crd_config.get("spec"),
         )
 
-        existing_crd = None
-        for crd in existing_crds.items:
-            if crd.metadata.name == desired_crd.metadata["name"]:
-                existing_crd = crd
-                break
+        existing_crd = next(
+            (
+                crd
+                for crd in existing_crds.items
+                if crd.metadata.name == desired_crd.metadata["name"]
+            ),
+            None,
+        )
 
         try:
             if existing_crd:
@@ -148,9 +150,7 @@ def setup_kube_crd(
                     # TODO: kubernetes server will sometimes reply with conditions:null,
                     # figure out how to deal with this correctly, for more details:
                     # https://github.com/kubernetes/kubernetes/pull/64996
-                    if "`conditions`, must not be `None`" in str(err):
-                        pass
-                    else:
+                    if "`conditions`, must not be `None`" not in str(err):
                         raise err
             log.info(f"deployed {desired_crd.metadata['name']} for {cluster}:{service}")
         except ApiException as exc:

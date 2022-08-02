@@ -102,12 +102,14 @@ def tron_instance_status(
     # job info
     status["job_name"] = short_job
     status["job_status"] = job_content["status"]
-    status["job_schedule"] = "{} {}".format(
-        job_content["scheduler"]["type"], job_content["scheduler"]["value"]
-    )
-    status["job_url"] = (
-        tron_tools.get_tron_dashboard_for_cluster(settings.cluster) + f"#job/{job}"
-    )
+    status[
+        "job_schedule"
+    ] = f'{job_content["scheduler"]["type"]} {job_content["scheduler"]["value"]}'
+
+    status[
+        "job_url"
+    ] = f"{tron_tools.get_tron_dashboard_for_cluster(settings.cluster)}#job/{job}"
+
 
     if action:
         status["action_name"] = action
@@ -166,11 +168,10 @@ def marathon_instance_status(
         service, instance, marathon_apps_with_clients
     )
 
-    mstatus.update(
-        marathon_job_status(
-            service, instance, job_config, matching_apps_with_clients, verbose
-        )
+    mstatus |= marathon_job_status(
+        service, instance, job_config, matching_apps_with_clients, verbose
     )
+
 
     if include_smartstack or include_envoy:
         service_namespace_config = marathon_tools.load_service_namespace_config(
@@ -319,15 +320,13 @@ def marathon_app_status(
         app_status["unused_offers"] = unused_offers_summary
 
     if dashboard_link:
-        app_status["dashboard_url"] = "{}/ui/#/apps/%2F{}".format(
-            dashboard_link.rstrip("/"), app.id.lstrip("/")
-        )
+        app_status[
+            "dashboard_url"
+        ] = f'{dashboard_link.rstrip("/")}/ui/#/apps/%2F{app.id.lstrip("/")}'
 
-    if list_tasks is True:
-        app_status["tasks"] = []
-        for task in app.tasks:
-            app_status["tasks"].append(build_marathon_task_dict(task))
 
+    if list_tasks:
+        app_status["tasks"] = [build_marathon_task_dict(task) for task in app.tasks]
     return app_status
 
 
@@ -492,12 +491,13 @@ async def marathon_mesos_status(
 
     if verbose > 0:
         num_tail_lines = calculate_tail_lines(verbose)
-        running_task_dict_futures = []
-
-        for task in running_and_active_tasks:
-            running_task_dict_futures.append(
-                asyncio.ensure_future(get_mesos_running_task_dict(task, num_tail_lines))
+        running_task_dict_futures = [
+            asyncio.ensure_future(
+                get_mesos_running_task_dict(task, num_tail_lines)
             )
+            for task in running_and_active_tasks
+        ]
+
 
         non_running_tasks = select_tasks_by_id(
             await get_cached_list_of_not_running_tasks_from_frameworks(),
@@ -505,13 +505,12 @@ async def marathon_mesos_status(
         )
         non_running_tasks.sort(key=lambda task: get_first_status_timestamp(task) or 0)
         non_running_tasks = list(reversed(non_running_tasks[-10:]))
-        non_running_task_dict_futures = []
-        for task in non_running_tasks:
-            non_running_task_dict_futures.append(
-                asyncio.ensure_future(
-                    get_mesos_non_running_task_dict(task, num_tail_lines)
-                )
+        non_running_task_dict_futures = [
+            asyncio.ensure_future(
+                get_mesos_non_running_task_dict(task, num_tail_lines)
             )
+            for task in non_running_tasks
+        ]
 
         all_task_dict_futures = (
             running_task_dict_futures + non_running_task_dict_futures
@@ -638,9 +637,7 @@ def instance_status(request):
     if include_mesos is None:
         include_mesos = True
 
-    instance_status: Dict[str, Any] = {}
-    instance_status["service"] = service
-    instance_status["instance"] = instance
+    instance_status: Dict[str, Any] = {"service": service, "instance": instance}
     try:
         instance_type = validate_service_instance(
             service, instance, settings.cluster, settings.soa_dir
@@ -690,18 +687,17 @@ def instance_status(request):
                 instance_status, service, instance, verbose
             )
         elif pik.can_handle(instance_type):
-            instance_status.update(
-                pik.instance_status(
-                    service=service,
-                    instance=instance,
-                    verbose=verbose,
-                    include_smartstack=include_smartstack,
-                    include_envoy=include_envoy,
-                    use_new=use_new,
-                    instance_type=instance_type,
-                    settings=settings,
-                )
+            instance_status |= pik.instance_status(
+                service=service,
+                instance=instance,
+                verbose=verbose,
+                include_smartstack=include_smartstack,
+                include_envoy=include_envoy,
+                use_new=use_new,
+                instance_type=instance_type,
+                settings=settings,
             )
+
         elif instance_type == "tron":
             instance_status["tron"] = tron_instance_status(
                 instance_status, service, instance, verbose
@@ -814,10 +810,9 @@ def instance_delay(request):
 
     if len(unused_offers_summary) != 0:
         return unused_offers_summary
-    else:
-        response = Response()
-        response.status_int = 204
-        return response
+    response = Response()
+    response.status_int = 204
+    return response
 
 
 @view_config(
@@ -876,7 +871,7 @@ def get_marathon_dashboard_links(marathon_clients, system_paasta_config):
     except KeyError:
         pass
     if isinstance(links, list) and len(links) >= len(marathon_clients.current):
-        return {client: url for client, url in zip(marathon_clients.current, links)}
+        return dict(zip(marathon_clients.current, links))
     return None
 
 
@@ -896,10 +891,7 @@ def instance_mesh_status(request):
     include_smartstack = request.swagger_data.get("include_smartstack")
     include_envoy = request.swagger_data.get("include_envoy")
 
-    instance_mesh: Dict[str, Any] = {}
-    instance_mesh["service"] = service
-    instance_mesh["instance"] = instance
-
+    instance_mesh: Dict[str, Any] = {"service": service, "instance": instance}
     try:
         instance_type = validate_service_instance(
             service, instance, settings.cluster, settings.soa_dir
@@ -915,16 +907,15 @@ def instance_mesh_status(request):
         raise ApiFailure(error_message, 500)
 
     try:
-        instance_mesh.update(
-            pik.kubernetes_mesh_status(
-                service=service,
-                instance=instance,
-                instance_type=instance_type,
-                settings=settings,
-                include_smartstack=include_smartstack,
-                include_envoy=include_envoy,
-            )
+        instance_mesh |= pik.kubernetes_mesh_status(
+            service=service,
+            instance=instance,
+            instance_type=instance_type,
+            settings=settings,
+            include_smartstack=include_smartstack,
+            include_envoy=include_envoy,
         )
+
     except RuntimeError as e:
         raise ApiFailure(str(e), 405)
     except Exception:

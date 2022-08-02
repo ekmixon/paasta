@@ -72,8 +72,7 @@ def parse_args():
         action="store_true",
         help="show only service instances that need bouncing",
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def get_desired_marathon_configs(soa_dir):
@@ -82,8 +81,8 @@ def get_desired_marathon_configs(soa_dir):
         instance_type="marathon", cluster=cluster, soa_dir=soa_dir
     )
 
-    job_configs = dict()
-    formatted_marathon_configs = dict()
+    job_configs = {}
+    formatted_marathon_configs = {}
 
     for service, instance in instances:
         try:
@@ -116,11 +115,10 @@ def get_service_instances_that_need_bouncing(marathon_clients, soa_dir):
         desired_marathon_configs_formatted,
         desired_job_configs,
     ) = get_desired_marathon_configs(soa_dir)
-    desired_ids_and_clients = set()
-    for app_id, job_config in desired_job_configs.items():
-        desired_ids_and_clients.add(
-            (app_id, marathon_clients.get_current_client_for_service(job_config))
-        )
+    desired_ids_and_clients = {
+        (app_id, marathon_clients.get_current_client_for_service(job_config))
+        for app_id, job_config in desired_job_configs.items()
+    }
 
     current_apps_with_clients = {
         (app.id.lstrip("/"), client): app
@@ -142,12 +140,14 @@ def get_service_instances_that_need_bouncing(marathon_clients, soa_dir):
 
     for (app_id, client), app in current_apps_with_clients.items():
         short_app_id = long_job_id_to_short_job_id(app_id)
-        if short_app_id not in apps_that_need_bouncing:
-            if (
-                app.instances != desired_marathon_configs_formatted[app_id]["instances"]
+        if short_app_id not in apps_that_need_bouncing and (
+            (
+                app.instances
+                != desired_marathon_configs_formatted[app_id]["instances"]
                 or get_num_at_risk_tasks(app, draining_hosts) != 0
-            ):
-                apps_that_need_bouncing.add(short_app_id)
+            )
+        ):
+            apps_that_need_bouncing.add(short_app_id)
 
     return (app_id.replace("--", "_") for app_id in apps_that_need_bouncing)
 
@@ -167,9 +167,10 @@ def main():
         instances = get_services_for_cluster(
             cluster=cluster, instance_type="marathon", soa_dir=soa_dir
         )
-        service_instances = []
-        for name, instance in instances:
-            service_instances.append(compose_job_id(name, instance))
+        service_instances = [
+            compose_job_id(name, instance) for name, instance in instances
+        ]
+
     print("\n".join(service_instances))
     sys.exit(0)
 

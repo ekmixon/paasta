@@ -29,16 +29,16 @@ from paasta_tools.utils import decompose_job_id
 
 
 def _get_marathon_connection_string(service="marathon"):
-    return "http://%s" % get_service_connection_string(service)
+    return f"http://{get_service_connection_string(service)}"
 
 
 def _get_zookeeper_connection_string(chroot):
-    return "zk://{}/{}".format(get_service_connection_string("zookeeper"), chroot)
+    return f'zk://{get_service_connection_string("zookeeper")}/{chroot}'
 
 
 def setup_system_paasta_config():
     zk_connection_string = _get_zookeeper_connection_string("mesos-testcluster")
-    system_paasta_config = utils.SystemPaastaConfig(
+    return utils.SystemPaastaConfig(
         {
             "cluster": "testcluster",
             "deployd_log_level": "DEBUG",
@@ -77,7 +77,6 @@ def setup_system_paasta_config():
         },
         "/some_fake_path_to_config_dir/",
     )
-    return system_paasta_config
 
 
 def setup_marathon_clients():
@@ -88,7 +87,7 @@ def setup_marathon_clients():
 
 
 def get_paasta_api_url():
-    return "http://{}/{}".format(get_service_connection_string("api"), "swagger.json")
+    return f'http://{get_service_connection_string("api")}/swagger.json'
 
 
 def setup_paasta_api_client():
@@ -96,7 +95,7 @@ def setup_paasta_api_client():
 
 
 def _generate_mesos_cli_config(zk_host_and_port):
-    config = {
+    return {
         "profile": "default",
         "default": {
             "master": zk_host_and_port,
@@ -105,7 +104,6 @@ def _generate_mesos_cli_config(zk_host_and_port):
             "response_timeout": 5,
         },
     }
-    return config
 
 
 def write_mesos_cli_config(config):
@@ -276,9 +274,7 @@ def write_soa_dir_marathon_job(context, job_id, shard=None, previous_shard=None)
     }
     if hasattr(context, "cmd"):
         soa[instance]["cmd"] = context.cmd
-    with open(
-        os.path.join(soa_dir, service, "marathon-%s.yaml" % context.cluster), "w"
-    ) as f:
+    with open(os.path.join(soa_dir, service, f"marathon-{context.cluster}.yaml"), "w") as f:
         f.write(yaml.safe_dump(soa))
 
     context.soa_dir = soa_dir
@@ -293,14 +289,19 @@ def write_soa_dir_native_service(context, job_id):
         soa_dir = "/nail/etc/services/"
     if not os.path.exists(os.path.join(soa_dir, service)):
         os.makedirs(os.path.join(soa_dir, service))
-    with open(
-        os.path.join(soa_dir, service, "paasta_native-%s.yaml" % context.cluster), "w"
-    ) as f:
+    with open(os.path.join(soa_dir, service, f"paasta_native-{context.cluster}.yaml"), "w") as f:
         f.write(
             yaml.safe_dump(
-                {"%s" % instance: {"cpus": 0.1, "mem": 100, "cmd": "/bin/sleep 300"}}
+                {
+                    f"{instance}": {
+                        "cpus": 0.1,
+                        "mem": 100,
+                        "cmd": "/bin/sleep 300",
+                    }
+                }
             )
         )
+
     context.soa_dir = soa_dir
     context.service = service
     context.instance = instance
@@ -321,11 +322,7 @@ def call_load_paasta_native_job_config(context):
     '"{csv_instances}" image "{image}"'
 )
 def write_soa_dir_deployments(context, service, disabled, csv_instances, image):
-    if disabled == "disabled":
-        desired_state = "stop"
-    else:
-        desired_state = "start"
-
+    desired_state = "stop" if disabled == "disabled" else "start"
     if not os.path.exists(os.path.join(context.soa_dir, service)):
         os.makedirs(os.path.join(context.soa_dir, service))
     with open(os.path.join(context.soa_dir, service, "deployments.json"), "w") as dp:
@@ -333,9 +330,10 @@ def write_soa_dir_deployments(context, service, disabled, csv_instances, image):
             json.dumps(
                 {
                     "v1": {
-                        "{}:paasta-{}".format(
-                            service, utils.get_paasta_branch(context.cluster, instance)
-                        ): {"docker_image": image, "desired_state": desired_state}
+                        f"{service}:paasta-{utils.get_paasta_branch(context.cluster, instance)}": {
+                            "docker_image": image,
+                            "desired_state": desired_state,
+                        }
                         for instance in csv_instances.split(",")
                     },
                     "v2": {

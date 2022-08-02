@@ -118,8 +118,9 @@ def extract_args(args):
             )
         )
         emit_counter_metric(
-            "paasta.remote_run." + args.action + ".failed", service, "UNKNOWN"
+            f"paasta.remote_run.{args.action}.failed", service, "UNKNOWN"
         )
+
         sys.exit(1)
 
     instance = args.instance
@@ -134,8 +135,9 @@ def extract_args(args):
         except NoConfigurationForServiceError as e:
             print(e)
             emit_counter_metric(
-                "paasta.remote_run." + args.action + ".failed", service, instance
+                f"paasta.remote_run.{args.action}.failed", service, instance
             )
+
             sys.exit(1)
 
         if instance_type != "adhoc":
@@ -146,8 +148,9 @@ def extract_args(args):
                 )
             )
             emit_counter_metric(
-                "paasta.remote_run." + args.action + ".failed", service, instance
+                f"paasta.remote_run.{args.action}.failed", service, instance
             )
+
             sys.exit(1)
 
     return (system_paasta_config, service, cluster, soa_dir, instance, instance_type)
@@ -195,11 +198,7 @@ def generate_run_id(length=8):
 
 def create_framework_name(service, instance, run_id):
     """ Creates a framework name for our task """
-    return "paasta-remote {} {} {}".format(
-        compose_job_id(service, instance),
-        datetime.utcnow().strftime("%Y%m%d%H%M%S%f"),
-        run_id,
-    )
+    return f'paasta-remote {compose_job_id(service, instance)} {datetime.utcnow().strftime("%Y%m%d%H%M%S%f")} {run_id}'
 
 
 def create_mesos_executor(
@@ -264,13 +263,9 @@ def paasta_to_task_config_kwargs(
         }
         for volume in docker_volumes
     ]
-    # cmd kwarg
-    cmd = native_job_config.get_cmd()
-    if cmd:
+    if cmd := native_job_config.get_cmd():
         kwargs["cmd"] = cmd
-    # gpus kwarg
-    gpus = native_job_config.get_gpus()
-    if gpus:
+    if gpus := native_job_config.get_gpus():
         kwargs["gpus"] = int(gpus)
         kwargs["containerizer"] = "MESOS"  # docker containerizer does not support gpus
     # task name kwarg (requires everything else to hash)
@@ -331,14 +326,11 @@ def task_config_to_dict(task_config):
 
 
 def create_boto_session(taskproc_config, region):
-    # first, try to load credentials
-    credentials_file = taskproc_config.get("boto_credential_file")
-    if credentials_file:
-        with open(credentials_file) as f:
-            credentials = json.loads(f.read())
-    else:
+    if not (credentials_file := taskproc_config.get("boto_credential_file")):
         raise ValueError("Required aws credentials")
 
+    with open(credentials_file) as f:
+        credentials = json.loads(f.read())
     # second, create the session for the given region
     return Session(
         region_name=region,
@@ -360,7 +352,7 @@ def build_executor_stack(processor, cluster_executor, taskproc_config, cluster, 
     )
     # stateful executor
     StatefulExecutor = processor.executor_cls(provider="stateful")
-    stateful_executor = StatefulExecutor(
+    return StatefulExecutor(
         downstream_executor=task_logging_executor,
         persister=DynamoDBPersister(
             table_name=f"taskproc_events_{cluster}",
@@ -368,7 +360,6 @@ def build_executor_stack(processor, cluster_executor, taskproc_config, cluster, 
             endpoint_url=taskproc_config.get("dynamodb_endpoint"),
         ),
     )
-    return stateful_executor
 
 
 def set_runner_signal_handlers(runner):
@@ -431,7 +422,7 @@ def run_tasks_with_retries(executor_factory, task_config_factory, retries=0):
             executor = executor_factory()
             task_config = task_config_factory()
             terminal_event = run_task(executor, task_config)
-        except (Exception, ValueError) as e:
+        except Exception as e:
             # implies an error with our code, and not with mesos, so just return
             # immediately
             print(f"Except while running executor stack: {e}")
@@ -661,28 +652,29 @@ def remote_run_stop(args):
             emit_counter_metric("paasta.remote_run.stop.failed", service, instance)
             sys.exit(1)
 
-        found = [
-            f for f in frameworks if re.search(" %s$" % args.run_id, f.name) is not None
-        ]
-        if len(found) > 0:
+        if found := [
+            f
+            for f in frameworks
+            if re.search(f" {args.run_id}$", f.name) is not None
+        ]:
             framework_id = found[0].id
         else:
-            print(PaastaColors.red("Framework with run id %s not found." % args.run_id))
+            print(PaastaColors.red(f"Framework with run id {args.run_id} not found."))
             emit_counter_metric("paasta.remote_run.stop.failed", service, instance)
             sys.exit(1)
     else:
         found = [f for f in frameworks if f.id == framework_id]
-        if len(found) == 0:
+        if not found:
             print(
                 PaastaColors.red(
-                    "Framework id %s does not match any %s.%s remote-run. Check status to find the correct id."
-                    % (framework_id, service, instance)
+                    f"Framework id {framework_id} does not match any {service}.{instance} remote-run. Check status to find the correct id."
                 )
             )
+
             emit_counter_metric("paasta.remote_run.stop.failed", service, instance)
             sys.exit(1)
 
-    print("Tearing down framework %s." % framework_id)
+    print(f"Tearing down framework {framework_id}.")
     mesos_master = get_mesos_master()
     teardown = mesos_master.teardown(framework_id)
     if teardown.status_code == 200:
@@ -710,17 +702,12 @@ def remote_run_list_report(service, instance, cluster, frameworks=None):
         launch_time, run_id = re.match(
             r"paasta-remote [^\s]+ (\w+) (\w+)", f.name
         ).groups()
-        print(
-            "Launch time: %s, run id: %s, framework id: %s"
-            % (launch_time, run_id, f.id)
-        )
+        print(f"Launch time: {launch_time}, run id: {run_id}, framework id: {f.id}")
     if len(filtered) > 0:
         print(
-            (
-                "Use `paasta remote-run stop -s {} -c {} -i {} [-R <run id> "
-                "| -F <framework id>]` to stop."
-            ).format(service, cluster, instance)
+            f"Use `paasta remote-run stop -s {service} -c {cluster} -i {instance} [-R <run id> | -F <framework id>]` to stop."
         )
+
     else:
         print("Nothing found.")
 

@@ -100,7 +100,7 @@ def is_safe_to_kill(hostname):
 
 
 def is_hostname_local(hostname):
-    return hostname == "localhost" or hostname == getfqdn() or hostname == gethostname()
+    return hostname in ["localhost", getfqdn(), gethostname()]
 
 
 def is_safe_to_drain(hostname):
@@ -123,10 +123,10 @@ def is_healthy_in_haproxy(local_port, backends):
         ip, port, _ = ip_port_hostname_from_svname(backend["svname"])
         if ip == local_ip and port == local_port:
             if backend_is_up(backend):
-                log.debug("Found a healthy local backend: %s" % backend)
+                log.debug(f"Found a healthy local backend: {backend}")
                 return True
             else:
-                log.debug("Found a unhealthy local backend: %s" % backend)
+                log.debug(f"Found a unhealthy local backend: {backend}")
                 return False
     log.debug("Couldn't find any haproxy backend listening on %s" % local_port)
     return False
@@ -191,10 +191,9 @@ def are_local_tasks_in_danger():
                 service, instance, system_paasta_config, local_backends=local_backends
             ):
                 log.warning(
-                    "{}.{} on port {} is healthy but the service is in danger!".format(
-                        service, instance, port
-                    )
+                    f"{service}.{instance} on port {port} is healthy but the service is in danger!"
                 )
+
                 return True
         return False
     except Exception:

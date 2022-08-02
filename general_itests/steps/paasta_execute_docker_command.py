@@ -50,7 +50,7 @@ def create_docker_container(context, task_id, image_name):
 )
 def run_command_in_container(context, code, task_id):
     cmd = f'../paasta_tools/paasta_execute_docker_command.py -i {task_id} -c "exit {code}"'
-    print("Running cmd %s" % cmd)
+    print(f"Running cmd {cmd}")
     exit_code, output = _run(cmd)
     print(f"Got exitcode {exit_code} with output:\n{output}")
     context.return_code = exit_code
@@ -69,9 +69,6 @@ def check_container_exec_instances(context, num):
     container_info = context.docker_client.inspect_container(
         context.running_container_id
     )
-    if container_info["ExecIDs"] is None:
-        execs = []
-    else:
-        execs = container_info["ExecIDs"]
+    execs = [] if container_info["ExecIDs"] is None else container_info["ExecIDs"]
     print("Container info:\n%s" % container_info)
     assert len(execs) <= int(num)

@@ -44,8 +44,7 @@ def parse_args():
         action="store_true",
         help="Print namespaces to be deleted, instead of deleting them",
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def main():

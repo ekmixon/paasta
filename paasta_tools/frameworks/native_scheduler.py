@@ -146,7 +146,7 @@ class NativeScheduler(Scheduler):
 
     def registered(self, driver: MesosSchedulerDriver, frameworkId, masterInfo):
         self.framework_id = frameworkId["value"]
-        self.log("Registered with framework ID %s" % frameworkId["value"])
+        self.log(f'Registered with framework ID {frameworkId["value"]}')
 
         self.task_store = self.task_store_type(
             service_name=self.service_name,
@@ -175,9 +175,9 @@ class NativeScheduler(Scheduler):
             for idx, offer in enumerate(offers):
                 if offer.agent_id.value in self.blacklisted_slaves:
                     log.critical(
-                        "Ignoring offer %s from blacklisted slave %s"
-                        % (offer.id.value, offer.agent_id.value)
+                        f"Ignoring offer {offer.id.value} from blacklisted slave {offer.agent_id.value}"
                     )
+
                     filters = {"refuse_seconds": self.blacklist_timeout}
                     driver.declineOffer(offer.id, filters)
                     del offers[idx]
@@ -237,12 +237,12 @@ class NativeScheduler(Scheduler):
 
     def need_more_tasks(self, name, existingTasks, scheduledTasks):
         """Returns whether we need to start more tasks."""
-        num_have = 0
-        for task, parameters in existingTasks.items():
-            if self.is_task_new(name, task) and (
-                parameters.mesos_task_state in LIVE_TASK_STATES
-            ):
-                num_have += 1
+        num_have = sum(
+            1
+            for task, parameters in existingTasks.items()
+            if self.is_task_new(name, task)
+            and (parameters.mesos_task_state in LIVE_TASK_STATES)
+        )
 
         for task in scheduledTasks:
             if task["name"] == name:
@@ -271,13 +271,13 @@ class NativeScheduler(Scheduler):
         }
 
     def is_task_new(self, name, tid):
-        return tid.startswith("%s." % name)
+        return tid.startswith(f"{name}.")
 
     def log_and_kill(self, driver: MesosSchedulerDriver, task_id):
         log.critical(
-            "Task stuck launching for %ss, assuming to have failed. Killing task."
-            % self.staging_timeout
+            f"Task stuck launching for {self.staging_timeout}s, assuming to have failed. Killing task."
         )
+
         self.blacklist_slave(self.task_store.get_task(task_id).offer.agent_id.value)
         self.kill_task(driver, task_id)
 
@@ -334,7 +334,7 @@ class NativeScheduler(Scheduler):
             task_port = random.choice(list(remainingPorts))
 
             task = copy.deepcopy(base_task)
-            task["task_id"] = {"value": "{}.{}".format(task["name"], uuid.uuid4().hex)}
+            task["task_id"] = {"value": f'{task["name"]}.{uuid.uuid4().hex}'}
 
             task["container"]["docker"]["port_mappings"][0]["host_port"] = task_port
             for resource in task["resources"]:
@@ -357,11 +357,14 @@ class NativeScheduler(Scheduler):
         return tasks, new_constraint_state
 
     def offer_matches_pool(self, offer):
-        for attribute in offer.attributes:
-            if attribute.name == "pool":
-                return attribute.text.value == self.service_config.get_pool()
-        # we didn't find a pool attribute on this slave, so assume it's not in our pool.
-        return False
+        return next(
+            (
+                attribute.text.value == self.service_config.get_pool()
+                for attribute in offer.attributes
+                if attribute.name == "pool"
+            ),
+            False,
+        )
 
     def within_reconcile_backoff(self):
         return time.time() - self.reconcile_backoff < self.reconcile_start_time
@@ -384,7 +387,7 @@ class NativeScheduler(Scheduler):
 
         # update tasks
         task_id = update["task_id"]["value"]
-        self.log("Task {} is in state {}".format(task_id, update["state"]))
+        self.log(f'Task {task_id} is in state {update["state"]}')
 
         task_params = self.task_store.update_task(
             task_id, mesos_task_state=update["state"]
@@ -500,11 +503,11 @@ class NativeScheduler(Scheduler):
 
     def get_happy_tasks(self, tasks_with_params: Dict[str, MesosTaskParameters]):
         """Filter a dictionary of tasks->params to those that are running and not draining."""
-        happy_tasks = {}
-        for tid, params in tasks_with_params.items():
-            if params.mesos_task_state == TASK_RUNNING and not params.is_draining:
-                happy_tasks[tid] = params
-        return happy_tasks
+        return {
+            tid: params
+            for tid, params in tasks_with_params.items()
+            if params.mesos_task_state == TASK_RUNNING and not params.is_draining
+        }
 
     def get_draining_tasks(self, tasks_with_params: Dict[str, MesosTaskParameters]):
         """Filter a dictionary of tasks->params to those that are draining."""
@@ -519,25 +522,23 @@ class NativeScheduler(Scheduler):
         for resource in params.resources:
             if resource["name"] == "ports":
                 for rg in resource["ranges"]["range"]:
-                    for port in range(rg["begin"], rg["end"] + 1):
-                        ports.append(port)
-
+                    ports.extend(iter(range(rg["begin"], rg["end"] + 1)))
         return DrainTask(
             id=task_id, host=params.offer["agent_id"]["value"], ports=ports
         )
 
     async def undrain_task(self, task_id: str):
-        self.log("Undraining task %s" % task_id)
+        self.log(f"Undraining task {task_id}")
         await self.drain_method.stop_draining(self.make_drain_task(task_id))
         self.task_store.update_task(task_id, is_draining=False)
 
     async def drain_task(self, task_id: str):
-        self.log("Draining task %s" % task_id)
+        self.log(f"Draining task {task_id}")
         await self.drain_method.drain(self.make_drain_task(task_id))
         self.task_store.update_task(task_id, is_draining=True)
 
     def kill_task(self, driver: MesosSchedulerDriver, task_id: str):
-        self.log("Killing task %s" % task_id)
+        self.log(f"Killing task {task_id}")
         driver.killTask({"value": task_id})
         self.task_store.update_task(task_id, mesos_task_state=TASK_KILLING)
 
@@ -585,14 +586,14 @@ class NativeScheduler(Scheduler):
         self.constraints = self.service_config.get_constraints() or []
 
     def blacklist_slave(self, agent_id: str):
-        log.debug("Blacklisting slave: %s" % agent_id)
+        log.debug(f"Blacklisting slave: {agent_id}")
         self.blacklisted_slaves.setdefault(agent_id, time.time())
 
     def unblacklist_slave(self, agent_id: str):
         if agent_id not in self.blacklisted_slaves:
             return
 
-        log.debug("Unblacklisting slave: %s" % agent_id)
+        log.debug(f"Unblacklisting slave: {agent_id}")
         with self.blacklisted_slaves_lock:
             del self.blacklisted_slaves[agent_id]
 
@@ -613,14 +614,14 @@ def find_existing_id_if_exists_or_gen_new(name):
     for framework in mesos_tools.get_all_frameworks(active_only=True):
         if framework.name == name:
             return framework.id
-    else:
-        return uuid.uuid4().hex
+    return uuid.uuid4().hex
 
 
 def create_driver(framework_name, scheduler, system_paasta_config, implicit_acks=False):
-    master_uri = "{}:{}".format(
-        mesos_tools.get_mesos_leader(), mesos_tools.MESOS_MASTER_PORT
+    master_uri = (
+        f"{mesos_tools.get_mesos_leader()}:{mesos_tools.MESOS_MASTER_PORT}"
     )
+
 
     framework = {
         "user": getpass.getuser(),
@@ -631,7 +632,7 @@ def create_driver(framework_name, scheduler, system_paasta_config, implicit_acks
         "principal": system_paasta_config.get_paasta_native_config()["principal"],
     }
 
-    driver = MesosSchedulerDriver(
+    return MesosSchedulerDriver(
         sched=scheduler,
         framework=framework,
         master_uri=master_uri,
@@ -640,7 +641,6 @@ def create_driver(framework_name, scheduler, system_paasta_config, implicit_acks
         principal=system_paasta_config.get_paasta_native_config()["principal"],
         secret=system_paasta_config.get_paasta_native_config()["secret"],
     )
-    return driver
 
 
 def get_paasta_native_jobs_for_cluster(cluster=None, soa_dir=DEFAULT_SOA_DIR):

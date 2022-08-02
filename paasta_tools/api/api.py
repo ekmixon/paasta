@@ -72,8 +72,7 @@ def parse_paasta_api_args():
         dest="max_request_seconds",
         help="Maximum seconds allowed for a worker to process a request",
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def make_app(global_config=None):
@@ -170,8 +169,7 @@ def application(env, start_response):
     global _app
     if not _app:
         _app = make_app()
-        manhole_path = os.environ.get("PAASTA_MANHOLE_PATH")
-        if manhole_path:
+        if manhole_path := os.environ.get("PAASTA_MANHOLE_PATH"):
             manhole.install(
                 socket_path=f"{manhole_path}-{os.getpid()}", locals={"_app": _app}
             )
@@ -188,10 +186,10 @@ def setup_paasta_api():
     service_configuration_lib.disable_yaml_cache()
 
     settings.system_paasta_config = load_system_paasta_config()
-    if os.environ.get("PAASTA_API_CLUSTER"):
-        settings.cluster = os.environ.get("PAASTA_API_CLUSTER")
-    else:
-        settings.cluster = settings.system_paasta_config.get_cluster()
+    settings.cluster = (
+        os.environ.get("PAASTA_API_CLUSTER")
+        or settings.system_paasta_config.get_cluster()
+    )
 
     settings.marathon_clients = marathon_tools.get_marathon_clients(
         marathon_tools.get_marathon_servers(settings.system_paasta_config)

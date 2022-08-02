@@ -53,8 +53,9 @@ def parse_args() -> argparse.Namespace:
         "service_instance_list",
         nargs="+",
         help="The list of Kubernetes service instances to create or update",
-        metavar="SERVICE%sINSTANCE" % SPACER,
+        metavar=f"SERVICE{SPACER}INSTANCE",
     )
+
     parser.add_argument(
         "-d",
         "--soa-dir",
@@ -78,8 +79,7 @@ def parse_args() -> argparse.Namespace:
         type=int,
         help="Update or create up to this number of service instances. Default is 0 (no limit).",
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def main() -> None:
@@ -111,8 +111,9 @@ def validate_job_name(service_instance: str) -> bool:
         service, instance, _, __ = decompose_job_id(service_instance)
     except InvalidJobNameError:
         log.error(
-            "Invalid service instance specified. Format is service%sinstance." % SPACER
+            f"Invalid service instance specified. Format is service{SPACER}instance."
         )
+
         return False
     return True
 
@@ -188,15 +189,13 @@ def create_application_object(
         )
     except NoDeploymentsAvailable:
         log.debug(
-            "No deployments found for %s.%s in cluster %s. Skipping."
-            % (service, instance, cluster)
+            f"No deployments found for {service}.{instance} in cluster {cluster}. Skipping."
         )
+
         return True, None
     except NoConfigurationForServiceError:
-        error_msg = (
-            f"Could not read kubernetes configuration file for %s.%s in cluster %s"
-            % (service, instance, cluster)
-        )
+        error_msg = f"Could not read kubernetes configuration file for {service}.{instance} in cluster {cluster}"
+
         log.error(error_msg)
         return False, None
 

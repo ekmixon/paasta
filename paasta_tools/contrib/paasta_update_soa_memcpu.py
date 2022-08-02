@@ -157,7 +157,7 @@ def get_report_from_splunk(creds, app, filename, criteria_filter):
     creds = creds.split(":")
     resp = requests.post(url, data=data, auth=(creds[0], creds[1]))
     resp_text = resp.text.split("\n")
-    log.info("Found {} services to rightsize".format(len(resp_text) - 1))
+    log.info(f"Found {len(resp_text) - 1} services to rightsize")
     resp_text = [x for x in resp_text if x]
     resp_text = [json.loads(x) for x in resp_text]
     services_to_update = {}
@@ -165,8 +165,7 @@ def get_report_from_splunk(creds, app, filename, criteria_filter):
         if "result" not in d:
             raise ValueError(f"Splunk request didn't return any results: {resp_text}")
         criteria = d["result"]["criteria"]
-        serv = {}
-        serv["service"] = criteria.split(" ")[0]
+        serv = {"service": criteria.split(" ")[0]}
         serv["cluster"] = criteria.split(" ")[1]
         serv["instance"] = criteria.split(" ")[2]
         serv["owner"] = d["result"].get("service_owner", "Unavailable")
@@ -243,9 +242,8 @@ def bulk_review(filenames, originating_search, publish=False):
 
 
 def commit(filename, serv):
-    message = "Updating {} for {}provisioned cpu from {} to {} cpus".format(
-        filename, serv["state"], serv["old_cpus"], serv["cpus"]
-    )
+    message = f'Updating {filename} for {serv["state"]}provisioned cpu from {serv["old_cpus"]} to {serv["cpus"]} cpus'
+
     log.debug(f"Commit {filename} with the following message: {message}")
     subprocess.check_call(("git", "add", filename))
     subprocess.check_call(("git", "commit", "-n", "-m", message))
@@ -371,10 +369,7 @@ def _get_dashboard_qs_param(param, value):
 
 def generate_ticket_content(serv):
     cpus = float(serv["cpus"])
-    provisioned_state = "over"
-    if cpus > float(serv["old_cpus"]):
-        provisioned_state = "under"
-
+    provisioned_state = "under" if cpus > float(serv["old_cpus"]) else "over"
     serv["state"] = provisioned_state
     ticket_desc = (
         "This ticket and CR have been auto-generated to help keep PaaSTA right-sized."
@@ -412,12 +407,12 @@ def generate_ticket_content(serv):
 
 def bulk_rightsize(report, create_code_review, publish_code_review, create_new_branch):
     if create_new_branch:
-        branch = "rightsize-bulk-{}".format(int(time.time()))
+        branch = f"rightsize-bulk-{int(time.time())}"
         create_branch(branch)
 
     filenames = []
     for _, serv in report["results"].items():
-        filename = "{}/{}.yaml".format(serv["service"], serv["cluster"])
+        filename = f'{serv["service"]}/{serv["cluster"]}.yaml'
         filenames.append(filename)
         cpus = serv.get("cpus", None)
         mem = serv.get("mem", None)
@@ -432,13 +427,13 @@ def individual_rightsize(
     report, create_tickets, jira_creds, create_review, publish_review, JIRA
 ):
     for _, serv in report["results"].items():
-        filename = "{}/{}.yaml".format(serv["service"], serv["cluster"])
+        filename = f'{serv["service"]}/{serv["cluster"]}.yaml'
         summary, ticket_desc = generate_ticket_content(serv)
 
         if create_tickets is True:
             branch = create_jira_ticket(serv, jira_creds, ticket_desc, JIRA)
         else:
-            branch = "rightsize-{}".format(int(time.time() * 1000))
+            branch = f"rightsize-{int(time.time() * 1000)}"
 
         create_branch(branch)
         cpus = serv.get("cpus", None)

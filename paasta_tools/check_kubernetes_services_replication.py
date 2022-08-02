@@ -108,24 +108,21 @@ def check_kubernetes_pod_replication(
         "alert_after", default_alert_after
     )
 
-    # if the primary registration does not match the service_instance name then
-    # the best we can do is check k8s for replication (for now).
     if proxy_port is not None and registrations[0] == instance_config.job_id:
-        is_well_replicated = monitoring_tools.check_replication_for_instance(
+        return monitoring_tools.check_replication_for_instance(
             instance_config=instance_config,
             expected_count=expected_count,
             replication_checker=replication_checker,
             dry_run=dry_run,
         )
-        return is_well_replicated
-    else:
-        check_healthy_kubernetes_tasks_for_service_instance(
-            instance_config=instance_config,
-            expected_count=expected_count,
-            all_pods=all_tasks_or_pods,
-            dry_run=dry_run,
-        )
-        return None
+
+    check_healthy_kubernetes_tasks_for_service_instance(
+        instance_config=instance_config,
+        expected_count=expected_count,
+        all_pods=all_tasks_or_pods,
+        dry_run=dry_run,
+    )
+    return None
 
 
 if __name__ == "__main__":

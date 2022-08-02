@@ -24,7 +24,7 @@ def get_deploy_durations_from_file(filename):
     )
 
     timedeltas = defaultdict(list)
-    last_time = dict()
+    last_time = {}
     instance_bitvector = defaultdict(bool)  # defaults to False
 
     for datum in data:
@@ -45,9 +45,9 @@ def display_bounce_info(timedeltas):
     timedeltas: iterable of timedelta objects
     """
     std = list(sorted(timedeltas))
-    print("Median time to bounce: {} seconds".format(std[len(std) / 2]))
-    print("10% time to bounce: {}".format(std[len(std) / 10]))
-    print("90% time to bounce: {}".format(std[len(std) * 9 / 10]))
+    print(f"Median time to bounce: {std[len(std) / 2]} seconds")
+    print(f"10% time to bounce: {std[len(std) / 10]}")
+    print(f"90% time to bounce: {std[len(std) * 9 / 10]}")
 
 
 def main(filenames):
@@ -57,7 +57,7 @@ def main(filenames):
         timedeltas = get_deploy_durations_from_file(filename)
         for instance, tdlist in timedeltas.items():
             if timedeltas:
-                print("Instance: %s" % instance)
+                print(f"Instance: {instance}")
                 display_bounce_info(tdlist)
         print("Overall:")
         display_bounce_info(itertools.chain.from_iterable(timedeltas.values()))

@@ -89,7 +89,7 @@ def start_second_deployd(context):
     fd = context.daemon1.stderr
     fl = fcntl.fcntl(fd, fcntl.F_GETFL)
     fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
-    for i in range(0, 5):
+    for _ in range(5):
         try:
             output = context.daemon1.stderr.readline().decode("utf-8")
             print(output.rstrip("\n"))
@@ -134,9 +134,11 @@ def check_app_running(context, service_instance, seconds):
     context.current_client = context.marathon_clients.get_current_client_for_service(
         context.marathon_config
     )
-    while (attempts * step) < seconds:
-        if context.app_id in list_all_marathon_app_ids(context.current_client):
-            break
+    while (
+        attempts * step
+    ) < seconds and context.app_id not in list_all_marathon_app_ids(
+        context.current_client
+    ):
         time.sleep(step)
         attempts += 1
     assert context.app_id in list_all_marathon_app_ids(context.current_client)

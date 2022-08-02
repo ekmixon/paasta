@@ -57,8 +57,7 @@ def parse_args(argv) -> argparse.Namespace:
         default=DEFAULT_SOA_DIR,
         help="define a different soa config directory",
     )
-    args = parser.parse_args(argv)
-    return args
+    return parser.parse_args(argv)
 
 
 Marathon_Dashboard_Item = TypedDict(

@@ -53,10 +53,10 @@ def get_hmac_for_secret(
                 return secret_file["environments"][secret_environment]["signature"]
             except KeyError:
                 print(
-                    "Failed to get secret signature at environments:{}:signature in json"
-                    " file".format(secret_environment),
+                    f"Failed to get secret signature at environments:{secret_environment}:signature in json file",
                     file=sys.stderr,
                 )
+
                 return None
     except IOError:
         print(f"Failed to open json secret at {secret_path}", file=sys.stderr)
@@ -95,16 +95,16 @@ def get_secret_hashes(
     soa_dir: str,
 ) -> Dict[str, str]:
 
-    secret_hashes = {}
-    for env_var_val in environment_variables.values():
-        if is_secret_ref(env_var_val):
-            secret_hashes[env_var_val] = get_hmac_for_secret(
-                env_var_val=env_var_val,
-                service=service,
-                soa_dir=soa_dir,
-                secret_environment=secret_environment,
-            )
-    return secret_hashes
+    return {
+        env_var_val: get_hmac_for_secret(
+            env_var_val=env_var_val,
+            service=service,
+            soa_dir=soa_dir,
+            secret_environment=secret_environment,
+        )
+        for env_var_val in environment_variables.values()
+        if is_secret_ref(env_var_val)
+    }
 
 
 def decrypt_secret_environment_for_service(
@@ -149,16 +149,15 @@ def decrypt_secret_environment_variables(
         shared_secret_env
     )
 
-    decrypted_secrets.update(
-        decrypt_secret_environment_for_service(
-            service_secret_env,
-            service_name,
-            secret_provider_name,
-            soa_dir,
-            cluster_name,
-            secret_provider_kwargs,
-        )
+    decrypted_secrets |= decrypt_secret_environment_for_service(
+        service_secret_env,
+        service_name,
+        secret_provider_name,
+        soa_dir,
+        cluster_name,
+        secret_provider_kwargs,
     )
+
     decrypted_secrets.update(
         decrypt_secret_environment_for_service(
             shared_secret_env,

@@ -109,8 +109,7 @@ def parse_args(argv=None):
         help="Default %(default)s",
         default=DEFAULT_NUM_WORKERS,
     )
-    args = parser.parse_args(argv)
-    return args
+    return parser.parse_args(argv)
 
 
 def setup_logging(verbose):
@@ -142,7 +141,7 @@ def main(argv=None):
 
     # start n-1 separate processes, then run_server() on this one
     num_forks = args.num_workers - 1
-    for x in range(num_forks):
+    for _ in range(num_forks):
         if os.fork() == 0:
             run_server(args.listen_host, args.listen_port)
 

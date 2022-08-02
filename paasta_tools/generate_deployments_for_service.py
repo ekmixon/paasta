@@ -95,8 +95,7 @@ def parse_args() -> argparse.Namespace:
         required=True,
         help="Service name to make the deployments.json for",
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def get_latest_deployment_tag(
@@ -116,8 +115,7 @@ def get_latest_deployment_tag(
     pattern = re.compile(r"^refs/tags/paasta-%s-(\d{8}T\d{6})-deploy$" % deploy_group)
 
     for ref_name, sha in refs.items():
-        match = pattern.match(ref_name)
-        if match:
+        if match := pattern.match(ref_name):
             dtime = match.groups()[0]
             if most_recent_dtime is None or dtime > most_recent_dtime:
                 most_recent_dtime = dtime
@@ -214,7 +212,7 @@ def get_service_from_docker_image(image_name: str) -> str:
     docker-paasta.yelpcorp.com:443/services-example_service:paasta-591ae8a7b3224e3b3322370b858377dd6ef335b6
     """
     matches = re.search(".*/services-(.*?):paasta-.*?", image_name)
-    return matches.group(1)
+    return matches[1]
 
 
 def get_desired_state_by_branch_and_sha(
@@ -225,8 +223,7 @@ def get_desired_state_by_branch_and_sha(
     states_by_branch_and_sha: Dict[Tuple[str, str], List[Tuple[str, Any]]] = {}
 
     for ref_name, sha in remote_refs.items():
-        match = re.match(tag_pattern, ref_name)
-        if match:
+        if match := re.match(tag_pattern, ref_name):
             gd = match.groupdict()
             states_by_branch_and_sha.setdefault((gd["branch"], sha), []).append(
                 (gd["state"], gd["force_bounce"])

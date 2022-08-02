@@ -27,11 +27,11 @@ def current_value_forecast_policy(historical_load, **kwargs):
 
 def window_historical_load(historical_load, window_begin, window_end):
     """Filter historical_load down to just the datapoints lying between times window_begin and window_end, inclusive."""
-    filtered = []
-    for timestamp, value in historical_load:
-        if timestamp >= window_begin and timestamp <= window_end:
-            filtered.append((timestamp, value))
-    return filtered
+    return [
+        (timestamp, value)
+        for timestamp, value in historical_load
+        if timestamp >= window_begin and timestamp <= window_end
+    ]
 
 
 def trailing_window_historical_load(historical_load, window_size):

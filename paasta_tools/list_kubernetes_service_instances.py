@@ -63,8 +63,7 @@ def parse_args():
             "them. Kubernets apps created by PaaSTA use sanitised names."
         ),
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def main():

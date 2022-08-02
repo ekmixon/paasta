@@ -39,8 +39,7 @@ def load_method(module_name, method_name):
     :return: a function
     """
     module = __import__(module_name, fromlist=[method_name])
-    method = getattr(module, method_name)
-    return method
+    return getattr(module, method_name)
 
 
 def modules_in_pkg(pkg):
@@ -72,10 +71,7 @@ def list_external_commands():
 
 
 def calling_external_command():
-    if len(sys.argv) > 1:
-        return sys.argv[1] in list_external_commands()
-    else:
-        return False
+    return sys.argv[1] in list_external_commands() if len(sys.argv) > 1 else False
 
 
 def exec_subcommand(argv):
@@ -94,7 +90,7 @@ def add_subparser(command, subparsers):
 
     :param command: a simple string - e.g. 'list'
     :param subparsers: an ArgumentParser object"""
-    module_name = "paasta_tools.cli.cmds.%s" % command
+    module_name = f"paasta_tools.cli.cmds.{command}"
     add_subparser_fn = load_method(module_name, "add_subparser")
     add_subparser_fn(subparsers)
 
@@ -172,41 +168,46 @@ def get_argparser(commands=None):
 
     # Adding a separate help subparser allows us to respond to "help" without --help
     help_parser = subparsers.add_parser(
-        "help", help=f"run `paasta <subcommand> -h` for help"
+        "help", help="run `paasta <subcommand> -h` for help"
     )
+
     help_parser.set_defaults(command=None)
 
     # Build a list of subcommands to add them in alphabetical order later
     command_choices: List[Tuple[str, Any]] = []
     if commands is None:
-        for command in sorted(modules_in_pkg(cmds)):
-            command_choices.append(
-                (command, (add_subparser, [command, subparsers], {}))
-            )
-    elif commands:
-        for command in commands:
-            if command not in PAASTA_SUBCOMMANDS:
-                # could be external subcommand
-                continue
-            command_choices.append(
-                (
-                    command,
-                    (add_subparser, [PAASTA_SUBCOMMANDS[command], subparsers], {}),
-                )
-            )
-    else:
-        for command in PAASTA_SUBCOMMANDS.keys():
-            command_choices.append(
-                (
-                    command,
-                    (subparsers.add_parser, [command], dict(help="", add_help=False)),
-                )
-            )
-
-    for command in list_external_commands():
-        command_choices.append(
-            (command, (subparsers.add_parser, [command], dict(help="")))
+        command_choices.extend(
+            (command, (add_subparser, [command, subparsers], {}))
+            for command in sorted(modules_in_pkg(cmds))
         )
+
+    elif commands:
+        command_choices.extend(
+            (
+                command,
+                (add_subparser, [PAASTA_SUBCOMMANDS[command], subparsers], {}),
+            )
+            for command in commands
+            if command in PAASTA_SUBCOMMANDS
+        )
+
+    else:
+        command_choices.extend(
+            (
+                command,
+                (
+                    subparsers.add_parser,
+                    [command],
+                    dict(help="", add_help=False),
+                ),
+            )
+            for command in PAASTA_SUBCOMMANDS.keys()
+        )
+
+    command_choices.extend(
+        (command, (subparsers.add_parser, [command], dict(help="")))
+        for command in list_external_commands()
+    )
 
     for (_, (fn, args, kwds)) in sorted(command_choices, key=lambda e: e[0]):
         fn(*args, **kwds)

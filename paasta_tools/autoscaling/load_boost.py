@@ -58,7 +58,7 @@ def get_boosted_load(zk_boost_path: str, current_load: float) -> float:
                 # If there is an expected_load value, that means we've just completed
                 # a boost period. Reset it to 0
                 if boost_values.expected_load > 0:
-                    zk.set(zk_boost_path + "/expected_load", "0".encode("utf-8"))
+                    zk.set(f"{zk_boost_path}/expected_load", "0".encode("utf-8"))
 
                 # Boost is no longer active - return current load with no boost
                 return current_load
@@ -71,16 +71,14 @@ def get_boosted_load(zk_boost_path: str, current_load: float) -> float:
                     f"Activating boost, storing expected load: {expected_load} in ZooKeeper"
                 )
 
-                zk.ensure_path(zk_boost_path + "/expected_load")
-                zk.set(
-                    zk_boost_path + "/expected_load", str(expected_load).encode("utf-8")
-                )
+                zk.ensure_path(f"{zk_boost_path}/expected_load")
+                zk.set(f"{zk_boost_path}/expected_load", str(expected_load).encode("utf-8"))
 
             else:
                 expected_load = boost_values.expected_load
 
             # We return the boosted expected_load, but only if the current load isn't greater.
-            return expected_load if expected_load > current_load else current_load
+            return max(expected_load, current_load)
 
     except Exception as e:
         # Fail gracefully in the face of ANY error
@@ -108,11 +106,12 @@ def get_boost_values(zk_boost_path: str, zk: KazooClient) -> BoostValues:
     expected_load: float = 0
 
     try:
-        end_time = float(zk.get(zk_boost_path + "/end_time")[0].decode("utf-8"))
-        boost_factor = float(zk.get(zk_boost_path + "/factor")[0].decode("utf-8"))
+        end_time = float(zk.get(f"{zk_boost_path}/end_time")[0].decode("utf-8"))
+        boost_factor = float(zk.get(f"{zk_boost_path}/factor")[0].decode("utf-8"))
         expected_load = float(
-            zk.get(zk_boost_path + "/expected_load")[0].decode("utf-8")
+            zk.get(f"{zk_boost_path}/expected_load")[0].decode("utf-8")
         )
+
 
     except NoNodeError:
         # If we can't read boost values from zookeeper
@@ -147,18 +146,16 @@ def set_boost_factor(
 
     if not override and factor > MAX_BOOST_FACTOR:
         log.warning(
-            "Boost factor {} does not sound reasonable. Defaulting to {}".format(
-                factor, MAX_BOOST_FACTOR
-            )
+            f"Boost factor {factor} does not sound reasonable. Defaulting to {MAX_BOOST_FACTOR}"
         )
+
         factor = MAX_BOOST_FACTOR
 
     if duration_minutes > MAX_BOOST_DURATION:
         log.warning(
-            "Boost duration of {} minutes is too much. Falling back to {}.".format(
-                duration_minutes, MAX_BOOST_DURATION
-            )
+            f"Boost duration of {duration_minutes} minutes is too much. Falling back to {MAX_BOOST_DURATION}."
         )
+
         duration_minutes = MAX_BOOST_DURATION
 
     current_time = get_time()
@@ -177,9 +174,9 @@ def set_boost_factor(
             if duration_minutes > 0:
                 writer.send((metrics_key, end_time, 1.0))
 
-    zk_end_time_path = zk_boost_path + "/end_time"
-    zk_factor_path = zk_boost_path + "/factor"
-    zk_expected_load_path = zk_boost_path + "/expected_load"
+    zk_end_time_path = f"{zk_boost_path}/end_time"
+    zk_factor_path = f"{zk_boost_path}/factor"
+    zk_expected_load_path = f"{zk_boost_path}/expected_load"
 
     with ZookeeperPool() as zk:
         if not override and current_time < get_boost_values(zk_boost_path, zk).end_time:
@@ -198,10 +195,9 @@ def set_boost_factor(
             raise
 
         log.info(
-            "Load boost: Set capacity boost factor {} at path {} until {}".format(
-                factor, zk_boost_path, datetime.fromtimestamp(end_time).strftime("%c")
-            )
+            f'Load boost: Set capacity boost factor {factor} at path {zk_boost_path} until {datetime.fromtimestamp(end_time).strftime("%c")}'
         )
+
 
         # Let's check that this factor has been properly written to zk
         return get_boost_values(zk_boost_path, zk) == BoostValues(

@@ -97,8 +97,9 @@ def parse_args() -> argparse.Namespace:
         "service_instance_list",
         nargs="*",
         help="The list of service instances to check",
-        metavar="SERVICE%sINSTANCE" % SPACER,
+        metavar=f"SERVICE{SPACER}INSTANCE",
     )
+
     parser.add_argument(
         "-v", "--verbose", action="store_true", dest="verbose", default=False
     )
@@ -108,9 +109,7 @@ def parse_args() -> argparse.Namespace:
         dest="dry_run",
         help="Print Sensu alert events and metrics instead of sending them",
     )
-    options = parser.parse_args()
-
-    return options
+    return parser.parse_args()
 
 
 def check_services_replication(
@@ -149,9 +148,9 @@ def check_services_replication(
 
             else:
                 log.debug(
-                    "%s is not deployed. Skipping replication monitoring."
-                    % instance_config.job_id
+                    f"{instance_config.job_id} is not deployed. Skipping replication monitoring."
                 )
+
 
     num_under_replicated = len(
         [status for status in replication_statuses if status is False]

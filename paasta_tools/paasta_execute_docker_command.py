@@ -45,8 +45,7 @@ def parse_args():
     parser.add_argument(
         "-t", "--timeout", default=45, type=int, help="timeout for command"
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 class TimeoutException(Exception):
@@ -95,9 +94,9 @@ def main():
 
     docker_client = get_docker_client()
 
-    container_id = get_container_id_for_mesos_id(docker_client, args.mesos_id)
-
-    if container_id:
+    if container_id := get_container_id_for_mesos_id(
+        docker_client, args.mesos_id
+    ):
         try:
             with time_limit(args.timeout):
                 output, return_code = execute_in_container(

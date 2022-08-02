@@ -32,8 +32,7 @@ def parse_args():
     parser.add_argument(
         "-v", "--verbose", action="store_true", dest="verbose", default=False
     )
-    options = parser.parse_args()
-    return options
+    return parser.parse_args()
 
 
 def main() -> None:

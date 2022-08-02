@@ -80,15 +80,14 @@ def add_subparser(subparsers):
 def paasta_pause_service_autoscaler(args):
     """With a given cluster and duration, pauses the paasta service autoscaler
        in that cluster for duration minutes"""
-    if args.duration > MAX_PAUSE_DURATION:
-        if not args.force:
-            print(
-                "Specified duration: {d} longer than max: {m}".format(
-                    d=args.duration, m=MAX_PAUSE_DURATION
-                )
+    if args.duration > MAX_PAUSE_DURATION and not args.force:
+        print(
+            "Specified duration: {d} longer than max: {m}".format(
+                d=args.duration, m=MAX_PAUSE_DURATION
             )
-            print("If you are really sure, run again with --force")
-            return 3
+        )
+        print("If you are really sure, run again with --force")
+        return 3
 
     if args.info:
         return_code = get_service_autoscale_pause_time(args.cluster)

@@ -120,9 +120,7 @@ def read_oom_events_from_scribe(cluster, superregion, num_lines=1000):
             except json.decoder.JSONDecodeError:
                 pass
     except StreamTailerSetupError as e:
-        if "No data in stream" in str(e):
-            pass
-        else:
+        if "No data in stream" not in str(e):
             raise e
 
 

@@ -126,17 +126,18 @@ def get_casper_endpoints(
     """Filters out and returns casper endpoints from Envoy clusters."""
     casper_endpoints: Set[Tuple[str, int]] = set()
     for cluster_status in clusters_info["cluster_statuses"]:
-        if "host_statuses" in cluster_status:
-            if cluster_status["name"].startswith("spectre.") and cluster_status[
-                "name"
-            ].endswith(".egress_cluster"):
-                for host_status in cluster_status["host_statuses"]:
-                    casper_endpoints.add(
-                        (
-                            host_status["address"]["socket_address"]["address"],
-                            host_status["address"]["socket_address"]["port_value"],
-                        )
+        if (
+            "host_statuses" in cluster_status
+            and cluster_status["name"].startswith("spectre.")
+            and cluster_status["name"].endswith(".egress_cluster")
+        ):
+            for host_status in cluster_status["host_statuses"]:
+                casper_endpoints.add(
+                    (
+                        host_status["address"]["socket_address"]["address"],
+                        host_status["address"]["socket_address"]["port_value"],
                     )
+                )
     return frozenset(casper_endpoints)
 
 
@@ -155,9 +156,7 @@ def get_backends_from_eds(namespace: str, envoy_eds_path: str) -> List[Tuple[str
         with open(eds_file_for_namespace) as f:
             eds_yaml = yaml.safe_load(f)
             for resource in eds_yaml.get("resources", []):
-                endpoints = resource.get("endpoints")
-                # endpoints could be None if there are no backends listed
-                if endpoints:
+                if endpoints := resource.get("endpoints"):
                     for endpoint in endpoints:
                         for lb_endpoint in endpoint.get("lb_endpoints", []):
                             address = lb_endpoint["endpoint"]["address"][
@@ -186,10 +185,7 @@ def get_backends(
     :returns backends: A list of dicts representing the backends of all
                        services or the requested service
     """
-    if service:
-        services = [service]
-    else:
-        services = None
+    services = [service] if service else None
     return get_multiple_backends(
         services,
         envoy_host=envoy_host,
@@ -226,47 +222,50 @@ def get_multiple_backends(
         str, List[Tuple[EnvoyBackend, bool]]
     ] = collections.defaultdict(list)
     for cluster_status in clusters_info["cluster_statuses"]:
-        if "host_statuses" in cluster_status:
-            if cluster_status["name"].endswith(".egress_cluster"):
-                service_name = cluster_status["name"][: -len(".egress_cluster")]
+        if "host_statuses" in cluster_status and cluster_status[
+            "name"
+        ].endswith(".egress_cluster"):
+            service_name = cluster_status["name"][: -len(".egress_cluster")]
 
-                if services is None or service_name in services:
-                    cluster_backends = []
-                    casper_endpoint_found = False
-                    for host_status in cluster_status["host_statuses"]:
-                        address = host_status["address"]["socket_address"]["address"]
-                        port_value = host_status["address"]["socket_address"][
-                            "port_value"
-                        ]
+            if services is None or service_name in services:
+                cluster_backends = []
+                casper_endpoint_found = False
+                for host_status in cluster_status["host_statuses"]:
+                    address = host_status["address"]["socket_address"]["address"]
+                    port_value = host_status["address"]["socket_address"][
+                        "port_value"
+                    ]
 
                         # Check if this endpoint is actually a casper backend
                         # If so, omit from the service's list of backends
-                        if not service_name.startswith("spectre."):
-                            if (address, port_value) in casper_endpoints:
-                                casper_endpoint_found = True
-                                continue
+                    if (
+                        not service_name.startswith("spectre.")
+                        and (address, port_value) in casper_endpoints
+                    ):
+                        casper_endpoint_found = True
+                        continue
 
-                        try:
-                            hostname = socket.gethostbyaddr(address)[0].split(".")[0]
-                        except socket.herror:
-                            # Default to the raw IP address if we can't lookup the hostname
-                            hostname = address
+                    try:
+                        hostname = socket.gethostbyaddr(address)[0].split(".")[0]
+                    except socket.herror:
+                        # Default to the raw IP address if we can't lookup the hostname
+                        hostname = address
 
-                        cluster_backends.append(
-                            (
-                                EnvoyBackend(
-                                    address=address,
-                                    port_value=port_value,
-                                    hostname=hostname,
-                                    eds_health_status=host_status["health_status"][
-                                        "eds_health_status"
-                                    ],
-                                    weight=host_status["weight"],
-                                ),
-                                casper_endpoint_found,
-                            )
+                    cluster_backends.append(
+                        (
+                            EnvoyBackend(
+                                address=address,
+                                port_value=port_value,
+                                hostname=hostname,
+                                eds_health_status=host_status["health_status"][
+                                    "eds_health_status"
+                                ],
+                                weight=host_status["weight"],
+                            ),
+                            casper_endpoint_found,
                         )
-                    backends[service_name] += cluster_backends
+                    )
+                backends[service_name] += cluster_backends
     return backends
 
 
@@ -292,14 +291,13 @@ def match_backends_and_pods(
 
     for pod in pods:
         ip = pod.status.pod_ip
-        for backend in backends_by_ip.pop(ip, [None]):
-            backend_pod_pairs.append((backend, pod))
+        backend_pod_pairs.extend(
+            (backend, pod) for backend in backends_by_ip.pop(ip, [None])
+        )
 
     # we've been popping in the above loop, so anything left didn't match a k8s pod.
     for backends in backends_by_ip.values():
-        for backend in backends:
-            backend_pod_pairs.append((backend, None))
-
+        backend_pod_pairs.extend((backend, None) for backend in backends)
     return backend_pod_pairs
 
 
@@ -329,14 +327,14 @@ def match_backends_and_tasks(
     for task in tasks:
         ip = socket.gethostbyname(task.host)
         for port in task.ports:
-            for backend in backends_by_ip_port.pop((ip, port), [None]):
-                backend_task_pairs.append((backend, task))
+            backend_task_pairs.extend(
+                (backend, task)
+                for backend in backends_by_ip_port.pop((ip, port), [None])
+            )
 
     # we've been popping in the above loop, so anything left didn't match a marathon task.
     for backends in backends_by_ip_port.values():
-        for backend in backends:
-            backend_task_pairs.append((backend, None))
-
+        backend_task_pairs.extend((backend, None) for backend in backends)
     return backend_task_pairs
 
 

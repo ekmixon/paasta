@@ -44,8 +44,7 @@ def parse_args():
         help="Don't actually stop any Marathon deployments",
     )
     parser.add_argument("-v", "--verbose", action="store_true")
-    options = parser.parse_args()
-    return options
+    return parser.parse_args()
 
 
 def timedelta_type(value):
@@ -78,11 +77,10 @@ def delete_deployment_if_too_old(client, deployment, max_date, dry_run):
                 f"Deleting {deployment.id} for {deployment.affected_apps[0]} as it is {age} old"
             )
             client.delete_deployment(deployment_id=deployment.id, force=False)
-    else:
-        if dry_run is True:
-            log.warning(
-                f"NOT deleting {deployment.id} for {deployment.affected_apps[0]} as it is {age} old"
-            )
+    elif dry_run is True:
+        log.warning(
+            f"NOT deleting {deployment.id} for {deployment.affected_apps[0]} as it is {age} old"
+        )
 
 
 def main():

@@ -43,12 +43,12 @@ def check_mesos_no_duplicate_frameworks() -> None:
     try:
         state = block(master.state)
     except MasterNotAvailableException as e:
-        print("CRITICAL: %s" % e.args[0])
+        print(f"CRITICAL: {e.args[0]}")
         sys.exit(2)
 
     result = assert_no_duplicate_frameworks(state, check)
     if result.healthy:
-        print("OK: " + result.message)
+        print(f"OK: {result.message}")
         sys.exit(0)
     else:
         print(result.message)

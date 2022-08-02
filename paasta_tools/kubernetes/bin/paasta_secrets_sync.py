@@ -70,8 +70,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-v", "--verbose", action="store_true", dest="verbose", default=False
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def main() -> None:
@@ -82,10 +81,7 @@ def main() -> None:
         logging.basicConfig(level=logging.WARNING)
 
     system_paasta_config = load_system_paasta_config()
-    if args.cluster:
-        cluster = args.cluster
-    else:
-        cluster = system_paasta_config.get_cluster()
+    cluster = args.cluster or system_paasta_config.get_cluster()
     secret_provider_name = system_paasta_config.get_secret_provider_name()
     vault_cluster_config = system_paasta_config.get_vault_cluster_config()
     kube_client = KubeClient()
@@ -109,19 +105,19 @@ def sync_all_secrets(
     soa_dir: str,
     namespace: str,
 ) -> bool:
-    results = []
-    for service in service_list:
-        results.append(
-            sync_secrets(
-                kube_client=kube_client,
-                cluster=cluster,
-                service=service,
-                secret_provider_name=secret_provider_name,
-                vault_cluster_config=vault_cluster_config,
-                soa_dir=soa_dir,
-                namespace=namespace,
-            )
+    results = [
+        sync_secrets(
+            kube_client=kube_client,
+            cluster=cluster,
+            service=service,
+            secret_provider_name=secret_provider_name,
+            vault_cluster_config=vault_cluster_config,
+            soa_dir=soa_dir,
+            namespace=namespace,
         )
+        for service in service_list
+    ]
+
     return all(results)
 
 
@@ -158,10 +154,9 @@ def sync_secrets(
                 secret = secret_file_path.name.replace(".json", "")
                 with open(secret_file_path, "r") as secret_file:
                     secret_data = json.load(secret_file)
-                secret_signature = secret_provider.get_secret_signature_from_data(
+                if secret_signature := secret_provider.get_secret_signature_from_data(
                     secret_data
-                )
-                if secret_signature:
+                ):
                     kubernetes_secret_signature = get_kubernetes_secret_signature(
                         kube_client=kube_client,
                         secret=secret,

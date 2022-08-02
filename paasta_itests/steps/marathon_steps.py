@@ -53,7 +53,7 @@ def list_marathon_apps_has_trivial_app(context):
         context.marathon_clients.current[0]
     )
     assert APP_ID in actual
-    assert context.marathon_clients.current[0].get_app("/%s" % APP_ID)
+    assert context.marathon_clients.current[0].get_app(f"/{APP_ID}")
 
 
 @then("it should show up in marathon_services_running_here")
@@ -120,7 +120,7 @@ def write_overrides_file(context, contents):
 def capacity_check_status_crit_warn(context, check_type, crit, warn, status, code):
     print(check_type, crit, warn)
     cmd = f"../paasta_tools/monitoring/check_capacity.py {check_type} --crit {crit} --warn {warn}"
-    print("Running cmd %s" % cmd)
+    print(f"Running cmd {cmd}")
     exit_code, output = _run(cmd)
     print(output)
     assert exit_code == code
@@ -129,8 +129,8 @@ def capacity_check_status_crit_warn(context, check_type, crit, warn, status, cod
 
 @then('capacity_check "{check_type}" should return "{status}" with code "{code:d}"')
 def capacity_check_type_status(context, check_type, status, code):
-    cmd = "../paasta_tools/monitoring/check_capacity.py %s" % check_type
-    print("Running cmd %s" % cmd)
+    cmd = f"../paasta_tools/monitoring/check_capacity.py {check_type}"
+    print(f"Running cmd {cmd}")
     exit_code, output = _run(cmd)
     print(output)
     assert exit_code == code
@@ -142,10 +142,9 @@ def capacity_check_type_status(context, check_type, status, code):
     'should return "{status}" with code "{code:d}"'
 )
 def capacity_check_type_status_overrides(context, check_type, attrs, status, code):
-    cmd = "../paasta_tools/monitoring/check_capacity.py {} --overrides {} --attributes {}".format(
-        check_type, context.overridefile, attrs
-    )
-    print("Running cmd %s" % cmd)
+    cmd = f"../paasta_tools/monitoring/check_capacity.py {check_type} --overrides {context.overridefile} --attributes {attrs}"
+
+    print(f"Running cmd {cmd}")
     exit_code, output = _run(cmd)
     print(output)
     assert exit_code == code

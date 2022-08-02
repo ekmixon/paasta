@@ -133,8 +133,7 @@ def _run_marathon_checks(
     marathon_clients: Sequence[MarathonClient],
 ) -> Sequence[HealthCheckResult]:
     try:
-        marathon_results = metastatus_lib.get_marathon_status(marathon_clients)
-        return marathon_results
+        return metastatus_lib.get_marathon_status(marathon_clients)
     except (MarathonError, ValueError) as e:
         print(PaastaColors.red(f"CRITICAL: Unable to contact Marathon cluster: {e}"))
         raise FatalError(2)
@@ -143,9 +142,9 @@ def _run_marathon_checks(
 def all_marathon_clients(
     marathon_clients: MarathonClients,
 ) -> Sequence[MarathonClient]:
-    return [
-        c for c in itertools.chain(marathon_clients.current, marathon_clients.previous)
-    ]
+    return list(
+        itertools.chain(marathon_clients.current, marathon_clients.previous)
+    )
 
 
 def utilization_table_by_grouping(
@@ -195,7 +194,7 @@ def utilization_table_by_grouping(
         # Always append the agent count last
         table_rows[-1].append(str(resource_info_dict["slave_count"]))
 
-    table_rows = sorted(table_rows, key=lambda x: x[0 : len(groupings)])
+    table_rows = sorted(table_rows, key=lambda x: x[:len(groupings)])
     all_rows.extend(table_rows)
 
     return all_rows, healthy_exit
@@ -288,17 +287,14 @@ def get_service_instance_stats(
     try:
         instance_config = get_instance_config(service, instance, cluster)
         # Get all fields that are showed in the 'paasta metastatus -vvv' command
-        if instance_config.get_gpus():
-            gpus = int(instance_config.get_gpus())
-        else:
-            gpus = 0
-        service_instance_stats = ServiceInstanceStats(
+        gpus = int(instance_config.get_gpus()) if instance_config.get_gpus() else 0
+        return ServiceInstanceStats(
             mem=instance_config.get_mem(),
             cpus=instance_config.get_cpus(),
             disk=instance_config.get_disk(),
             gpus=gpus,
         )
-        return service_instance_stats
+
     except Exception as e:
         log.error(
             f"Failed to get stats for service {service} instance {instance}: {str(e)}"
@@ -381,15 +377,15 @@ def print_output(argv: Optional[Sequence[str]] = None) -> None:
     )
     kube_summary = metastatus_lib.generate_summary_for_check("Kubernetes", kube_ok)
 
-    healthy_exit = True if all([mesos_ok, marathon_ok]) else False
+    healthy_exit = all([mesos_ok, marathon_ok])
 
     print(f"Master paasta_tools version: {__version__}")
-    print("Mesos leader: %s" % get_mesos_leader())
+    print(f"Mesos leader: {get_mesos_leader()}")
     metastatus_lib.print_results_for_healthchecks(
         mesos_summary, mesos_ok, all_mesos_results, args.verbose
     )
     if args.verbose > 1 and mesos_available:
-        print_with_indent("Resources Grouped by %s" % ", ".join(args.groupings), 2)
+        print_with_indent(f'Resources Grouped by {", ".join(args.groupings)}', 2)
         all_rows, healthy_exit = utilization_table_by_grouping_from_mesos_state(
             groupings=args.groupings, threshold=args.threshold, mesos_state=mesos_state
         )
@@ -403,9 +399,7 @@ def print_output(argv: Optional[Sequence[str]] = None) -> None:
                 args.service, args.instance, cluster
             )
             if service_instance_stats:
-                print_with_indent(
-                    "Service-Instance stats:" + str(service_instance_stats), 2
-                )
+                print_with_indent(f"Service-Instance stats:{str(service_instance_stats)}", 2)
             # print info about slaves here. Note that we don't make modifications to
             # the healthy_exit variable here, because we don't care about a single slave
             # having high usage.
@@ -429,7 +423,7 @@ def print_output(argv: Optional[Sequence[str]] = None) -> None:
         kube_summary, kube_ok, kube_results, args.verbose
     )
     if args.verbose > 1 and kube_available:
-        print_with_indent("Resources Grouped by %s" % ", ".join(args.groupings), 2)
+        print_with_indent(f'Resources Grouped by {", ".join(args.groupings)}', 2)
         all_rows, healthy_exit = utilization_table_by_grouping_from_kube(
             groupings=args.groupings, threshold=args.threshold, kube_client=kube_client
         )
@@ -443,9 +437,7 @@ def print_output(argv: Optional[Sequence[str]] = None) -> None:
                 args.service, args.instance, cluster
             )
             if service_instance_stats:
-                print_with_indent(
-                    "Service-Instance stats:" + str(service_instance_stats), 2
-                )
+                print_with_indent(f"Service-Instance stats:{str(service_instance_stats)}", 2)
             # print info about nodes here. Note that we don't make
             # modifications to the healthy_exit variable here, because we don't
             # care about a single node having high usage.

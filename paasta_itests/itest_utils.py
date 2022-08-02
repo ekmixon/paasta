@@ -63,16 +63,15 @@ def update_context_marathon_config(context):
             for key, value in context.job_config.format_marathon_app_dict().items()
             if key in whitelist_keys
         }
-    context.marathon_complete_config.update(
-        {
-            "cmd": "/bin/sleep 1m",
-            "constraints": None,
-            "container": {
-                "type": "DOCKER",
-                "docker": {"network": "BRIDGE", "image": "busybox"},
-            },
-        }
-    )
+    context.marathon_complete_config |= {
+        "cmd": "/bin/sleep 1m",
+        "constraints": None,
+        "container": {
+            "type": "DOCKER",
+            "docker": {"network": "BRIDGE", "image": "busybox"},
+        },
+    }
+
     if "max_instances" not in context:
         context.marathon_complete_config["instances"] = context.instances
 
@@ -84,10 +83,8 @@ def get_service_connection_string(service):
     function would return 0.0.0.0:23493 or whatever ephemeral forwarded port
     it has from docker-compose"""
     service = service.upper()
-    raw_host_port = os.environ["%s_PORT" % service]
-    # Remove leading tcp:// or similar
-    host_port = raw_host_port.split("://")[1]
-    return host_port
+    raw_host_port = os.environ[f"{service}_PORT"]
+    return raw_host_port.split("://")[1]
 
 
 @timeout(
@@ -97,9 +94,9 @@ def wait_for_marathon():
     """Waits for marathon to start. Maximum 30 seconds"""
     marathon_service = get_service_connection_string("marathon")
     while True:
-        print("Connecting marathon on %s" % marathon_service)
+        print(f"Connecting marathon on {marathon_service}")
         try:
-            response = requests.get("http://%s/ping" % marathon_service, timeout=5)
+            response = requests.get(f"http://{marathon_service}/ping", timeout=5)
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
             time.sleep(5)
             continue
@@ -152,7 +149,7 @@ def setup_mesos_cli_config(config_file, cluster):
             "response_timeout": 5,
         },
     }
-    print("Generating mesos.cli config file: %s" % config_file)
+    print(f"Generating mesos.cli config file: {config_file}")
     with open(config_file, "w") as fp:
         json.dump(mesos_cli_config, fp)
     os.environ["MESOS_CLI_CONFIG"] = config_file
@@ -160,7 +157,7 @@ def setup_mesos_cli_config(config_file, cluster):
 
 def cleanup_file(path_to_file):
     """Removes the given file"""
-    print("Removing generated file: %s" % path_to_file)
+    print(f"Removing generated file: {path_to_file}")
     os.remove(path_to_file)
 
 

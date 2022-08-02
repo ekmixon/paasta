@@ -76,10 +76,7 @@ class FlinkDeploymentConfig(LongRunningServiceConfig):
             "deploy_group",
         ],
     ) -> List[str]:
-        # Use InstanceConfig to validate shared config keys like cpus and mem
-        error_msgs = super().validate(params=params)
-
-        if error_msgs:
+        if error_msgs := super().validate(params=params):
             name = self.get_instance()
             return [f"{name}: {msg}" for msg in error_msgs]
         else:

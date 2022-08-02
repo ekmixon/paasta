@@ -32,36 +32,36 @@ def tail_paasta_logs_let_threads_be_threads(context):
     context.instances = ["fake_instance"]
     context.pods = ["fake_pod"]
     with mock.patch(
-        "paasta_tools.cli.cmds.logs.ScribeLogReader.determine_scribereader_envs",
-        autospec=True,
-    ) as context.determine_scribereader_envs_patch, mock.patch(
-        "paasta_tools.cli.cmds.logs.ScribeLogReader.scribe_tail", autospec=True
-    ) as scribe_tail_patch, mock.patch(
-        "paasta_tools.cli.cmds.logs.log", autospec=True
-    ), mock.patch(
-        "paasta_tools.cli.cmds.logs.print_log", autospec=True
-    ) as context.print_log_patch, mock.patch(
-        "paasta_tools.cli.cmds.logs.scribereader", autospec=True
-    ):
+            "paasta_tools.cli.cmds.logs.ScribeLogReader.determine_scribereader_envs",
+            autospec=True,
+        ) as context.determine_scribereader_envs_patch, mock.patch(
+            "paasta_tools.cli.cmds.logs.ScribeLogReader.scribe_tail", autospec=True
+        ) as scribe_tail_patch, mock.patch(
+            "paasta_tools.cli.cmds.logs.log", autospec=True
+        ), mock.patch(
+            "paasta_tools.cli.cmds.logs.print_log", autospec=True
+        ) as context.print_log_patch, mock.patch(
+            "paasta_tools.cli.cmds.logs.scribereader", autospec=True
+        ):
         context.determine_scribereader_envs_patch.return_value = ["env1", "env2"]
 
         def scribe_tail_side_effect(
-            self,
-            scribe_env,
-            stream_name,
-            service,
-            levels,
-            components,
-            clusters,
-            instances,
-            pods,
-            queue,
-            filter_fn,
-            parse_fn=None,
-        ):
+                    self,
+                    scribe_env,
+                    stream_name,
+                    service,
+                    levels,
+                    components,
+                    clusters,
+                    instances,
+                    pods,
+                    queue,
+                    filter_fn,
+                    parse_fn=None,
+                ):
             # The print here is just for debugging
-            print("fake log line added for %s" % scribe_env)
-            queue.put("fake log line added for %s" % scribe_env)
+            print(f"fake log line added for {scribe_env}")
+            queue.put(f"fake log line added for {scribe_env}")
             # This sleep() was the straw that broke the camel's back
             # and forced me to move this test into the integration
             # suite. The test is flaky without the sleep, and the

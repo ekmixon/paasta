@@ -69,9 +69,8 @@ def _commit_files(files: List[str], message: str) -> bool:
     result_code = subprocess.call(["git", "diff-index", "--quiet", "--cached", "HEAD"])
     if result_code == 0:
         return False
-    else:
-        subprocess.check_call(["git", "commit", "--no-verify", "--message", message])
-        return True
+    subprocess.check_call(["git", "commit", "--no-verify", "--message", message])
+    return True
 
 
 class PushNotFastForwardError(Exception):
@@ -90,9 +89,8 @@ def _push_to_remote(branch: str) -> None:
     except subprocess.CalledProcessError as e:
         if "Updates were rejected" in str(e.stdout):
             raise PushNotFastForwardError()
-        else:
-            log.error(f"Push to {branch} failed with:\n {e.stdout}")
-            raise
+        log.error(f"Push to {branch} failed with:\n {e.stdout}")
+        raise
 
 
 def validate_auto_config_file(filepath: str):
@@ -102,9 +100,8 @@ def validate_auto_config_file(filepath: str):
             return bool(
                 validate_schema(filepath, f"{AUTO_SOACONFIG_SUBDIR}/{file_type}")
             )
-    else:
-        logging.info(f"{filepath} is invalid because it has no validator defined")
-        return False
+    logging.info(f"{filepath} is invalid because it has no validator defined")
+    return False
 
 
 class AutoConfigUpdater:
@@ -176,15 +173,14 @@ class AutoConfigUpdater:
         sub_dir: Optional[str] = None,
         comment: Optional[str] = None,
     ):
-        result = write_auto_config_data(
+        if result := write_auto_config_data(
             service,
             extra_info,
             configs,
             soa_dir=self.working_dir,
             sub_dir=sub_dir,
             comment=comment,
-        )
-        if result:
+        ):
             self.files_changed.add(result)
 
     def get_existing_configs(

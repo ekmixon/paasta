@@ -77,8 +77,7 @@ class AutoscalerWatcher(PaastaWatcher):
             self.zk, path, func=self.process_folder_event, send_event=True
         )
         self.watchers[path] = watcher
-        children = watcher._client.get_children(watcher._path)
-        if children:
+        if children := watcher._client.get_children(watcher._path):
             for child in children:
                 self.watch_folder(f"{path}/{child}", enqueue_children=enqueue_children)
 
@@ -109,9 +108,7 @@ class AutoscalerWatcher(PaastaWatcher):
         self, data: Optional[bytes], stat: ZnodeStat, event: WatchedEvent
     ) -> None:
         self.log.debug(f"zk node change: {event}")
-        if event and (
-            event.type == EventType.CREATED or event.type == EventType.CHANGED
-        ):
+        if event and event.type in [EventType.CREATED, EventType.CHANGED]:
             self._enqueue_service_instance(event.path)
 
     def process_folder_event(
@@ -255,9 +252,7 @@ class MaintenanceWatcher(PaastaWatcher):
         )
         at_risk_tasks = []
         for app, client in marathon_apps_with_clients:
-            for task in app.tasks:
-                if task.host in draining_hosts:
-                    at_risk_tasks.append(task)
+            at_risk_tasks.extend(task for task in app.tasks if task.host in draining_hosts)
         self.log.info(f"At risk tasks: {at_risk_tasks}")
         service_instances: List[ServiceInstance] = []
         for task in at_risk_tasks:
@@ -266,11 +261,9 @@ class MaintenanceWatcher(PaastaWatcher):
             # check we haven't already added this instance,
             # no need to add the same instance to the bounce queue
             # more than once
-            if not any(
-                [
-                    (service, instance) == (si.service, si.instance)
-                    for si in service_instances
-                ]
+            if all(
+                (service, instance) != (si.service, si.instance)
+                for si in service_instances
             ):
                 service_instances.append(
                     ServiceInstance(
@@ -312,8 +305,7 @@ class PublicConfigEventHandler(pyinotify.ProcessEvent):
     def process_default(self, event: pyinotify.Event) -> None:
         self.log.debug(event)
         self.watch_new_folder(event)
-        event = self.filter_event(event)
-        if event:
+        if event := self.filter_event(event):
             self.log.debug("Public config changed on disk, loading new config.")
             try:
                 new_config = load_system_paasta_config()
@@ -371,20 +363,21 @@ class YelpSoaEventHandler(pyinotify.ProcessEvent):
         """Get service_name from the file inotify event,
         returns None if it is not an event we're interested in"""
         starts_with = ["marathon-", "deployments.json"]
-        if any([event.name.startswith(x) for x in starts_with]):
+        if any(event.name.startswith(x) for x in starts_with):
             dir_name = event.path.split("/")[-1]
             # we also have a subdir for autotuned_defaults
-            if dir_name == AUTO_SOACONFIG_SUBDIR:
-                service_name = event.path.split("/")[-2]
-            else:
-                service_name = dir_name
+            return (
+                event.path.split("/")[-2]
+                if dir_name == AUTO_SOACONFIG_SUBDIR
+                else dir_name
+            )
+
         elif event.name.endswith(".json") and event.path.split("/")[-1] == "secrets":
             # this is needed because we put the secrets json files in a
             # subdirectory so the service name would be "secrets" otherwise
-            service_name = event.path.split("/")[-2]
+            return event.path.split("/")[-2]
         else:
-            service_name = None
-        return service_name
+            return None
 
     def watch_new_folder(self, event: pyinotify.Event) -> None:
         if event.maskname == "IN_CREATE|IN_ISDIR" and ".~tmp~" not in event.pathname:
@@ -395,15 +388,14 @@ class YelpSoaEventHandler(pyinotify.ProcessEvent):
                 file_names = os.listdir(event.pathname)
             except OSError:
                 return
-            if any(["marathon-" in file_name for file_name in file_names]):
+            if any("marathon-" in file_name for file_name in file_names):
                 self.log.info(f"New folder with marathon files: {event.name}.")
                 self.bounce_service(event.name)
 
     def process_default(self, event: pyinotify.Event) -> None:
         self.log.debug(event)
         self.watch_new_folder(event)
-        service_name = self.get_service_name_from_event(event)
-        if service_name:
+        if service_name := self.get_service_name_from_event(event):
             self.log.info(
                 f"Looking for things to bounce for {service_name} because {event.path}/{event.name} changed."
             )

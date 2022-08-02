@@ -98,7 +98,7 @@ def list_previously_deployed_shas(parsed_args, **kwargs):
         for deploy_group in parsed_args.deploy_groups.split(",")
         if deploy_group
     }
-    return (sha for sha in get_git_shas_for_service(service, deploy_groups, soa_dir))
+    return iter(get_git_shas_for_service(service, deploy_groups, soa_dir))
 
 
 def get_git_shas_for_service(service, deploy_groups, soa_dir):
@@ -140,8 +140,9 @@ def list_previous_commits(service, deploy_groups, any_given_deploy_groups, git_s
     if len(git_shas) >= 2:
         sha, (timestamp, deploy_group) = git_shas[1]
         deploy_groups_arg_line = (
-            "-l %s " % ",".join(deploy_groups) if any_given_deploy_groups else ""
+            f'-l {",".join(deploy_groups)} ' if any_given_deploy_groups else ""
         )
+
         print(
             "\nFor example, to use the second to last commit from {} used on {}, run:".format(
                 format_timestamp(timestamp), PaastaColors.bold(deploy_group)

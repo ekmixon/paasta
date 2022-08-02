@@ -170,22 +170,18 @@ def validate_git_sha_is_latest(git_sha, git_url, deploy_group, service):
         marked_sha = get_latest_marked_sha(git_url, deploy_group)
     except LSRemoteException as e:
         print(
-            "Error talking to the git server: {}\n"
-            "It is not possible to verify that {} is marked for deployment in {}, "
-            "but I assume that it is marked and will continue waiting..".format(
-                e, git_sha, deploy_group
-            )
+            f"Error talking to the git server: {e}\nIt is not possible to verify that {git_sha} is marked for deployment in {deploy_group}, but I assume that it is marked and will continue waiting.."
         )
+
         return
     if marked_sha == "":
         raise GitShaError(
-            "ERROR: Nothing is marked for deployment "
-            "in {} for {}".format(deploy_group, service)
+            f"ERROR: Nothing is marked for deployment in {deploy_group} for {service}"
         )
+
     if git_sha != marked_sha:
         raise GitShaError(
-            "ERROR: The latest git SHA marked for "
-            "deployment in {} is {}".format(deploy_group, marked_sha)
+            f"ERROR: The latest git SHA marked for deployment in {deploy_group} is {marked_sha}"
         )
 
 
@@ -201,12 +197,7 @@ def validate_deploy_group(deploy_group, service, soa_dir):
 
     if len(invalid_deploy_groups) == 1:
         raise DeployGroupError(
-            "ERROR: These deploy groups are not currently "
-            "used anywhere: {}.\n"
-            "You probably need one of these in-use deploy "
-            "groups?:\n   {}".format(
-                ",".join(invalid_deploy_groups), ",".join(in_use_deploy_groups)
-            )
+            f'ERROR: These deploy groups are not currently used anywhere: {",".join(invalid_deploy_groups)}.\nYou probably need one of these in-use deploy groups?:\n   {",".join(in_use_deploy_groups)}'
         )
 
 
@@ -250,13 +241,10 @@ def paasta_wait_for_deployment(args):
         _log(
             service=service,
             component="deploy",
-            line=(
-                "Deployment of {} for {} complete".format(
-                    args.commit, args.deploy_group
-                )
-            ),
+            line=f"Deployment of {args.commit} for {args.deploy_group} complete",
             level="event",
         )
+
 
     except (KeyboardInterrupt, TimeoutError, NoSuchCluster):
         report_waiting_aborted(service, args.deploy_group)

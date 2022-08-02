@@ -149,8 +149,9 @@ def add_subparser(subparsers) -> None:
         dest="soa_dir",
         metavar="SOA_DIR",
         default=DEFAULT_SOA_DIR,
-        help=f"Define a different soa config directory. Defaults to %(default)s.",
+        help="Define a different soa config directory. Defaults to %(default)s.",
     )
+
 
     status_parser.add_argument(
         "-a",
@@ -228,15 +229,13 @@ def completer_clusters(prefix, parsed_args, **kwargs):
 def build_component_descriptions(components: Mapping[str, Mapping[str, Any]]) -> str:
     """Returns a colored description string for every log component
     based on its help attribute"""
-    output = []
-    for k, v in components.items():
-        output.append("    {}: {}".format(v["color"](k), v["help"]))
+    output = [f'    {v["color"](k)}: {v["help"]}' for k, v in components.items()]
     return "\n".join(output)
 
 
 def prefix(input_string: str, component: str) -> str:
     """Returns a colored string with the right colored prefix with a given component"""
-    return "{}: {}".format(LOG_COMPONENTS[component]["color"](component), input_string)
+    return f'{LOG_COMPONENTS[component]["color"](component)}: {input_string}'
 
 
 # The reason this returns true if start_time or end_time are None is because
@@ -288,16 +287,18 @@ def paasta_log_line_passes_filter(
         log.debug("Trouble parsing line as json. Skipping. Line: %r" % line)
         return False
     timestamp = isodate.parse_datetime(parsed_line.get("timestamp"))
-    if not check_timestamp_in_range(timestamp, start_time, end_time):
-        return False
     return (
-        parsed_line.get("level") in levels
-        and parsed_line.get("component") in components
-        and (
-            parsed_line.get("cluster") in clusters
-            or parsed_line.get("cluster") == ANY_CLUSTER
+        (
+            parsed_line.get("level") in levels
+            and parsed_line.get("component") in components
+            and (
+                parsed_line.get("cluster") in clusters
+                or parsed_line.get("cluster") == ANY_CLUSTER
+            )
+            and (instances is None or parsed_line.get("instance") in instances)
         )
-        and (instances is None or parsed_line.get("instance") in instances)
+        if check_timestamp_in_range(timestamp, start_time, end_time)
+        else False
     )
 
 
@@ -322,16 +323,18 @@ def paasta_app_output_passes_filter(
     # https://github.com/gweis/isodate/issues/53
     except ValueError:
         return True
-    if not check_timestamp_in_range(timestamp, start_time, end_time):
-        return False
     return (
-        parsed_line.get("component") in components
-        and (
-            parsed_line.get("cluster") in clusters
-            or parsed_line.get("cluster") == ANY_CLUSTER
+        (
+            parsed_line.get("component") in components
+            and (
+                parsed_line.get("cluster") in clusters
+                or parsed_line.get("cluster") == ANY_CLUSTER
+            )
+            and (instances is None or parsed_line.get("instance") in instances)
+            and (pods is None or parsed_line.get("pod_name") in pods)
         )
-        and (instances is None or parsed_line.get("instance") in instances)
-        and (pods is None or parsed_line.get("pod_name") in pods)
+        if check_timestamp_in_range(timestamp, start_time, end_time)
+        else False
     )
 
 
@@ -352,18 +355,15 @@ def extract_utc_timestamp_from_log_line(line: str) -> datetime.datetime:
     if not tokens:
         # Could not parse line
         return None
-    timestamp = tokens.group(0).strip()
+    timestamp = tokens[0].strip()
     dt = isodate.parse_datetime(timestamp)
-    utc_timestamp = datetime_convert_timezone(dt, dt.tzinfo, tz.tzutc())
-    return utc_timestamp
+    return datetime_convert_timezone(dt, dt.tzinfo, tz.tzutc())
 
 
 def parse_marathon_log_line(line: str, clusters: Sequence[str], service: str) -> str:
     utc_timestamp = extract_utc_timestamp_from_log_line(line)
-    if not utc_timestamp:
-        return ""
-    else:
-        return format_log_line(
+    return (
+        format_log_line(
             level="event",
             cluster=clusters[0],
             service=service,
@@ -372,6 +372,9 @@ def parse_marathon_log_line(line: str, clusters: Sequence[str], service: str) ->
             line=line.strip(),
             timestamp=utc_timestamp.strftime("%Y-%m-%dT%H:%M:%S.%f"),
         )
+        if utc_timestamp
+        else ""
+    )
 
 
 def marathon_log_line_passes_filter(
@@ -395,9 +398,11 @@ def marathon_log_line_passes_filter(
         return False
 
     timestamp = isodate.parse_datetime(parsed_line.get("timestamp"))
-    if not check_timestamp_in_range(timestamp, start_time, end_time):
-        return False
-    return format_job_id(service, "") in parsed_line.get("message", "")
+    return (
+        format_job_id(service, "") in parsed_line.get("message", "")
+        if check_timestamp_in_range(timestamp, start_time, end_time)
+        else False
+    )
 
 
 def print_log(
@@ -429,9 +434,9 @@ def prettify_timestamp(timestamp: datetime.datetime) -> str:
 
 def prettify_component(component: str) -> str:
     try:
-        return LOG_COMPONENTS[component]["color"]("[%s]" % component)
+        return LOG_COMPONENTS[component]["color"](f"[{component}]")
     except KeyError:
-        return "UNPRETTIFIABLE COMPONENT %s" % component
+        return f"UNPRETTIFIABLE COMPONENT {component}"
 
 
 def prettify_level(level: str, requested_levels: Sequence[str]) -> str:
@@ -443,13 +448,15 @@ def prettify_level(level: str, requested_levels: Sequence[str]) -> str:
     If multiple levels will be displayed, emit the (prettified) level so the
     resulting log output is not ambiguous.
     """
-    pretty_level = ""
     if len(requested_levels) > 1:
-        if level == "event":
-            pretty_level = PaastaColors.bold("[%s] " % level)
-        else:
-            pretty_level = PaastaColors.grey("[%s] " % level)
-    return pretty_level
+        return (
+            PaastaColors.bold(f"[{level}] ")
+            if level == "event"
+            else PaastaColors.grey(f"[{level}] ")
+        )
+
+    else:
+        return ""
 
 
 def prettify_log_line(
@@ -462,7 +469,7 @@ def prettify_log_line(
         parsed_line = json.loads(line)
     except ValueError:
         log.debug("Trouble parsing line as json. Skipping. Line: %r" % line)
-        return "Invalid JSON: %s" % line
+        return f"Invalid JSON: {line}"
 
     try:
         if strip_headers:
@@ -484,7 +491,7 @@ def prettify_log_line(
         log.debug(
             "JSON parsed correctly but was missing a key. Skipping. Line: %r" % line
         )
-        return "JSON missing keys: %s" % line
+        return f"JSON missing keys: {line}"
 
 
 # The map of name -> LogReader subclasses, used by configure_log.
@@ -653,13 +660,13 @@ class ScribeLogReader(LogReader):
         scribe_envs: Set[str] = set()
         for cluster in clusters:
             scribe_envs.update(self.determine_scribereader_envs(components, cluster))
-        log.debug("Connect to these scribe envs to tail scribe logs: %s" % scribe_envs)
+        log.debug(f"Connect to these scribe envs to tail scribe logs: {scribe_envs}")
 
         for scribe_env in scribe_envs:
             # These components all get grouped in one call for backwards compatibility
             grouped_components = {"build", "deploy", "monitoring"}
 
-            if any([component in components for component in grouped_components]):
+            if any(component in components for component in grouped_components):
                 stream_info = self.get_stream_info("default")
                 callback(components, stream_info, scribe_env, cluster=None)
 
@@ -969,30 +976,29 @@ class ScribeLogReader(LogReader):
                         line = line.decode("utf-8")
                     if parser_fn:
                         line = parser_fn(line, clusters, service)
-                    if filter_fn:
-                        if filter_fn(
-                            line,
-                            levels,
-                            service,
-                            components,
-                            clusters,
-                            instances,
-                            pods,
-                            start_time=start_time,
-                            end_time=end_time,
-                        ):
-                            try:
-                                parsed_line = json.loads(line)
-                                timestamp = isodate.parse_datetime(
-                                    parsed_line.get("timestamp")
-                                )
-                                if not timestamp.tzinfo:
-                                    timestamp = pytz.utc.localize(timestamp)
-                            except ValueError:
-                                timestamp = pytz.utc.localize(datetime.datetime.min)
+                    if filter_fn and filter_fn(
+                        line,
+                        levels,
+                        service,
+                        components,
+                        clusters,
+                        instances,
+                        pods,
+                        start_time=start_time,
+                        end_time=end_time,
+                    ):
+                        try:
+                            parsed_line = json.loads(line)
+                            timestamp = isodate.parse_datetime(
+                                parsed_line.get("timestamp")
+                            )
+                            if not timestamp.tzinfo:
+                                timestamp = pytz.utc.localize(timestamp)
+                        except ValueError:
+                            timestamp = pytz.utc.localize(datetime.datetime.min)
 
-                            line = {"raw_line": line, "sort_key": timestamp}
-                            aggregated_logs.append(line)
+                        line = {"raw_line": line, "sort_key": timestamp}
+                        aggregated_logs.append(line)
             except StreamTailerSetupError as e:
                 if "No data in stream" in str(e):
                     log.warning(f"Scribe stream {stream_name} is empty on {scribe_env}")
@@ -1157,11 +1163,10 @@ class ScribeLogReader(LogReader):
         config deployed to every server.
         """
         env = self.cluster_map.get(cluster, None)
-        if env is None:
-            print("I don't know where scribe logs for %s live?" % cluster)
-            sys.exit(1)
-        else:
+        if env is not None:
             return env
+        print("I don't know where scribe logs for %s live?" % cluster)
+        sys.exit(1)
 
 
 def scribe_env_to_locations(scribe_env):
@@ -1235,10 +1240,11 @@ def validate_filtering_args(
     if not log_reader.SUPPORTS_LINE_OFFSET and args.line_offset is not None:
         print(
             PaastaColors.red(
-                log_reader.__class__.__name__ + " does not support line based offsets"
+                f"{log_reader.__class__.__name__} does not support line based offsets"
             ),
             file=sys.stderr,
         )
+
         return False
     if not log_reader.SUPPORTS_LINE_COUNT and args.line_count is not None:
         print(
@@ -1252,20 +1258,22 @@ def validate_filtering_args(
     if not log_reader.SUPPORTS_TAILING and args.tail:
         print(
             PaastaColors.red(
-                log_reader.__class__.__name__ + " does not support tailing"
+                f"{log_reader.__class__.__name__} does not support tailing"
             ),
             file=sys.stderr,
         )
+
         return False
     if not log_reader.SUPPORTS_TIME and (
         args.time_from is not None or args.time_to is not None
     ):
         print(
             PaastaColors.red(
-                log_reader.__class__.__name__ + " does not support time based offsets"
+                f"{log_reader.__class__.__name__} does not support time based offsets"
             ),
             file=sys.stderr,
         )
+
         return False
 
     if args.tail and (
@@ -1385,11 +1393,7 @@ def paasta_logs(args: argparse.Namespace) -> int:
 
     instance = args.instance
 
-    if args.pods is None:
-        pods = None
-    else:
-        pods = args.pods.split(",")
-
+    pods = None if args.pods is None else args.pods.split(",")
     components = args.components
     if "app_output" in args.components:
         components.remove("app_output")
@@ -1437,34 +1441,33 @@ def paasta_logs(args: argparse.Namespace) -> int:
         args.line_count = abs(args.line_count)
 
     # Handle line based filtering
-    if args.line_count is not None and args.line_offset is None:
-        log_reader.print_last_n_logs(
-            service=service,
-            line_count=args.line_count,
-            levels=levels,
-            components=components,
-            clusters=cluster,
-            instances=instance,
-            pods=pods,
-            raw_mode=args.raw_mode,
-            strip_headers=args.strip_headers,
-        )
+    if args.line_count is not None:
+        if args.line_offset is None:
+            log_reader.print_last_n_logs(
+                service=service,
+                line_count=args.line_count,
+                levels=levels,
+                components=components,
+                clusters=cluster,
+                instances=instance,
+                pods=pods,
+                raw_mode=args.raw_mode,
+                strip_headers=args.strip_headers,
+            )
+        else:
+            log_reader.print_logs_by_offset(
+                service=service,
+                line_count=args.line_count,
+                line_offset=args.line_offset,
+                levels=levels,
+                components=components,
+                clusters=cluster,
+                instances=instance,
+                pods=pods,
+                raw_mode=args.raw_mode,
+                strip_headers=args.strip_headers,
+            )
         return 0
-    elif args.line_count is not None and args.line_offset is not None:
-        log_reader.print_logs_by_offset(
-            service=service,
-            line_count=args.line_count,
-            line_offset=args.line_offset,
-            levels=levels,
-            components=components,
-            clusters=cluster,
-            instances=instance,
-            pods=pods,
-            raw_mode=args.raw_mode,
-            strip_headers=args.strip_headers,
-        )
-        return 0
-
     # Handle time based filtering
     try:
         start_time, end_time = generate_start_end_time(args.time_from, args.time_to)

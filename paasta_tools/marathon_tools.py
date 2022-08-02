@@ -165,11 +165,10 @@ class MarathonClients:
         service_instance = compose_job_id(job_config.service, job_config.instance)
         if job_config.get_previous_marathon_shards() is not None:
             return [self.previous[i] for i in job_config.get_previous_marathon_shards()]
-        else:
-            try:
-                return [rendezvous_hash(choices=self.previous, key=service_instance)]
-            except ValueError:
-                return []
+        try:
+            return [rendezvous_hash(choices=self.previous, key=service_instance)]
+        except ValueError:
+            return []
 
     def get_all_clients_for_service(
         self, job_config: "MarathonServiceConfig"
@@ -191,7 +190,7 @@ def dedupe_clients(all_clients: Iterable[MarathonClient],) -> Sequence[MarathonC
     all_seen_servers: Set[str] = set()
     deduped_clients: List[MarathonClient] = []
     for client in all_clients:
-        if not any(server in all_seen_servers for server in client.servers):
+        if all(server not in all_seen_servers for server in client.servers):
             all_seen_servers.update(client.servers)
             deduped_clients.append(client)
 
@@ -479,10 +478,7 @@ class MarathonServiceConfig(LongRunningServiceConfig):
         with 30 instances will get backed off 10 times faster than a service with 3 instances)."""
         max_instances = self.get_max_instances()
         instances = max_instances if max_instances is not None else self.get_instances()
-        if instances == 0:
-            return 1
-        else:
-            return int(ceil(10.0 / instances))
+        return 1 if instances == 0 else int(ceil(10.0 / instances))
 
     def get_backoff_factor(self) -> float:
         return self.config_dict.get("backoff_factor", 2)
@@ -514,28 +510,27 @@ class MarathonServiceConfig(LongRunningServiceConfig):
         constraints = self.get_constraints()
         if constraints is not None:
             return constraints
-        else:
-            constraints = self.get_extra_constraints()
-            constraints.extend(
-                self.get_routing_constraints(
-                    service_namespace_config=service_namespace_config,
-                    system_paasta_config=system_paasta_config,
-                )
+        constraints = self.get_extra_constraints()
+        constraints.extend(
+            self.get_routing_constraints(
+                service_namespace_config=service_namespace_config,
+                system_paasta_config=system_paasta_config,
             )
-            constraints.extend(
-                self.get_deploy_constraints(
-                    blacklist=self.get_deploy_blacklist(),
-                    whitelist=self.get_deploy_whitelist(),
-                    system_deploy_blacklist=system_paasta_config.get_deploy_blacklist(),
-                    system_deploy_whitelist=system_paasta_config.get_deploy_whitelist(),
-                )
+        )
+        constraints.extend(
+            self.get_deploy_constraints(
+                blacklist=self.get_deploy_blacklist(),
+                whitelist=self.get_deploy_whitelist(),
+                system_deploy_blacklist=system_paasta_config.get_deploy_blacklist(),
+                system_deploy_whitelist=system_paasta_config.get_deploy_whitelist(),
             )
-            constraints.extend(self.get_pool_constraints())
-            constraints.extend(
-                self.get_hostname_unique_constraint(
-                    system_paasta_config=system_paasta_config
-                )
+        )
+        constraints.extend(self.get_pool_constraints())
+        constraints.extend(
+            self.get_hostname_unique_constraint(
+                system_paasta_config=system_paasta_config
             )
+        )
         return constraints
 
     def get_hostname_unique_constraint(
@@ -607,10 +602,7 @@ class MarathonServiceConfig(LongRunningServiceConfig):
         value_dict = get_mesos_slaves_grouped_by_attribute(
             filtered_slaves, discover_level
         )
-        routing_constraints: List[Constraint] = [
-            [discover_level, "GROUP_BY", str(len(value_dict.keys()))]
-        ]
-        return routing_constraints
+        return [[discover_level, "GROUP_BY", str(len(value_dict.keys()))]]
 
     def format_marathon_app_dict(
         self, system_paasta_config: Optional[SystemPaastaConfig] = None
@@ -755,13 +747,12 @@ class MarathonServiceConfig(LongRunningServiceConfig):
         ] = self.format_docker_parameters(
             with_labels=False, system_paasta_config=system_paasta_config
         )
-        secret_hashes = get_secret_hashes(
+        if secret_hashes := get_secret_hashes(
             environment_variables=config["env"],
             secret_environment=system_paasta_config.get_vault_environment(),
             service=self.service,
             soa_dir=self.soa_dir,
-        )
-        if secret_hashes:
+        ):
             ahash["paasta_secrets"] = secret_hashes
         return ahash
 
@@ -796,7 +787,7 @@ class MarathonServiceConfig(LongRunningServiceConfig):
         timeoutseconds = self.get_healthcheck_timeout_seconds()
         maxconsecutivefailures = self.get_healthcheck_max_consecutive_failures()
 
-        if mode == "http" or mode == "https":
+        if mode in ["http", "https"]:
             http_path = self.get_healthcheck_uri(service_namespace_config)
             protocol = f"MESOS_{mode.upper()}"
             healthchecks = [
@@ -842,9 +833,9 @@ class MarathonServiceConfig(LongRunningServiceConfig):
             healthchecks = []
         else:
             raise InvalidHealthcheckMode(
-                "Unknown mode: %s. Only acceptable healthcheck modes are http/https/tcp/cmd"
-                % mode
+                f"Unknown mode: {mode}. Only acceptable healthcheck modes are http/https/tcp/cmd"
             )
+
         return healthchecks
 
     def get_bounce_health_params(
@@ -917,17 +908,15 @@ def get_marathon_app_deploy_status(
 
     # Based on conditions at https://mesosphere.github.io/marathon/docs/marathon-ui.html
     if is_overdue:
-        deploy_status = MarathonDeployStatus.Waiting
+        return MarathonDeployStatus.Waiting
     elif backoff_seconds:
-        deploy_status = MarathonDeployStatus.Delayed
+        return MarathonDeployStatus.Delayed
     elif len(app.deployments) > 0:
-        deploy_status = MarathonDeployStatus.Deploying
+        return MarathonDeployStatus.Deploying
     elif app.instances == 0 and app.tasks_running == 0:
-        deploy_status = MarathonDeployStatus.Stopped
+        return MarathonDeployStatus.Stopped
     else:
-        deploy_status = MarathonDeployStatus.Running
-
-    return deploy_status
+        return MarathonDeployStatus.Running
 
 
 class CachedMarathonClient(MarathonClient):
@@ -961,27 +950,27 @@ def get_marathon_clients(
     marathon_servers: MarathonServers, cached: bool = False
 ) -> MarathonClients:
     current_servers = marathon_servers.current
-    current_clients = []
-    for current_server in current_servers:
-        current_clients.append(
-            get_marathon_client(
-                url=current_server.get_url(),
-                user=current_server.get_username(),
-                passwd=current_server.get_password(),
-                cached=cached,
-            )
+    current_clients = [
+        get_marathon_client(
+            url=current_server.get_url(),
+            user=current_server.get_username(),
+            passwd=current_server.get_password(),
+            cached=cached,
         )
+        for current_server in current_servers
+    ]
+
     previous_servers = marathon_servers.previous
-    previous_clients = []
-    for previous_server in previous_servers:
-        previous_clients.append(
-            get_marathon_client(
-                url=previous_server.get_url(),
-                user=previous_server.get_username(),
-                passwd=previous_server.get_password(),
-                cached=cached,
-            )
+    previous_clients = [
+        get_marathon_client(
+            url=previous_server.get_url(),
+            user=previous_server.get_username(),
+            passwd=previous_server.get_password(),
+            cached=cached,
         )
+        for previous_server in previous_servers
+    ]
+
     return MarathonClients(current=current_clients, previous=previous_clients)
 
 
@@ -1012,14 +1001,13 @@ def format_job_id(
     :returns: a composed app id in a format that Marathon accepts
 
     """
-    service = str(service).replace("_", "--")
-    instance = str(instance).replace("_", "--")
+    service = service.replace("_", "--")
+    instance = instance.replace("_", "--")
     if git_hash:
         git_hash = str(git_hash).replace("_", "--")
     if config_hash:
         config_hash = str(config_hash).replace("_", "--")
-    formatted = compose_job_id(service, instance, git_hash, config_hash)
-    return formatted
+    return compose_job_id(service, instance, git_hash, config_hash)
 
 
 def deformat_job_id(job_id: str) -> Tuple[str, str, str, str]:
@@ -1045,10 +1033,7 @@ def get_all_namespaces_for_service(
     smartstack = service_config.get("smartstack", {})
     namespace_list = []
     for namespace in smartstack:
-        if full_name:
-            name = compose_job_id(service, namespace)
-        else:
-            name = namespace
+        name = compose_job_id(service, namespace) if full_name else namespace
         namespace_list.append((name, smartstack[namespace]))
     return namespace_list
 
@@ -1170,12 +1155,13 @@ def get_puppet_services_running_here_for_nerve(
 ) -> Sequence[Tuple[str, ServiceNamespaceConfig]]:
     puppet_services = []
     for service, namespaces in sorted(get_puppet_services_that_run_here().items()):
-        for namespace in namespaces:
-            puppet_services.append(
-                _namespaced_get_classic_service_information_for_nerve(
-                    service, namespace, soa_dir
-                )
+        puppet_services.extend(
+            _namespaced_get_classic_service_information_for_nerve(
+                service, namespace, soa_dir
             )
+            for namespace in namespaces
+        )
+
     return puppet_services
 
 
@@ -1209,12 +1195,13 @@ def get_classic_services_running_here_for_nerve(
             x[0]
             for x in get_all_namespaces_for_service(service, soa_dir, full_name=False)
         ]
-        for namespace in namespaces:
-            classic_services.append(
-                _namespaced_get_classic_service_information_for_nerve(
-                    service, namespace, soa_dir
-                )
+        classic_services.extend(
+            _namespaced_get_classic_service_information_for_nerve(
+                service, namespace, soa_dir
             )
+            for namespace in namespaces
+        )
+
     return classic_services
 
 
@@ -1262,11 +1249,11 @@ def app_has_tasks(
     :returns: a boolean indicating whether there are atleast expected_tasks tasks with
         an app id matching app_id
     """
-    app_id = "/%s" % app_id
+    app_id = f"/{app_id}"
     try:
         tasks = client.list_tasks(app_id=app_id)
     except NotFoundError:
-        print("no app with id %s found" % app_id)
+        print(f"no app with id {app_id} found")
         raise
     print("app %s has %d of %d expected tasks" % (app_id, len(tasks), expected_tasks))
     if exact_matches_only:
@@ -1282,12 +1269,16 @@ def get_app_queue(client: MarathonClient, app_id: str) -> Optional[MarathonQueue
     :param app_id: The Marathon app id (without the leading /)
     :returns: The app queue from marathon
     """
-    app_id = "/%s" % app_id
+    app_id = f"/{app_id}"
     app_queue = client.list_queue(embed_last_unused_offers=True)
-    for app_queue_item in app_queue:
-        if app_queue_item.app.id == app_id:
-            return app_queue_item
-    return None
+    return next(
+        (
+            app_queue_item
+            for app_queue_item in app_queue
+            if app_queue_item.app.id == app_id
+        ),
+        None,
+    )
 
 
 def get_app_queue_status(
@@ -1321,9 +1312,7 @@ def get_app_queue_last_unused_offers(
     :param app_queue_item: app_queue_item returned by get_app_queue
     :returns: A list of offers received from mesos, including the reasons they were rejected
     """
-    if app_queue_item is None:
-        return []
-    return app_queue_item.last_unused_offers
+    return [] if app_queue_item is None else app_queue_item.last_unused_offers
 
 
 def summarize_unused_offers(app_queue: Optional[MarathonQueueItem]) -> Dict[str, int]:
@@ -1368,19 +1357,19 @@ def get_expected_instance_count_for_namespace(
     instance_type_class: The type of the instance, options are MarathonServiceConfig and KubernetesDeploymentConfig,
     :param soa_dir: The SOA configuration directory to read from
     :returns: An integer value of the # of expected instances for the namespace"""
-    total_expected = 0
     if not cluster:
         cluster = load_system_paasta_config().get_cluster()
 
     pscl = PaastaServiceConfigLoader(
         service=service, soa_dir=soa_dir, load_deployments=False
     )
-    for job_config in pscl.instance_configs(
-        cluster=cluster, instance_type_class=instance_type_class
-    ):
-        if f"{service}.{namespace}" in job_config.get_registrations():
-            total_expected += job_config.get_instances()
-    return total_expected
+    return sum(
+        job_config.get_instances()
+        for job_config in pscl.instance_configs(
+            cluster=cluster, instance_type_class=instance_type_class
+        )
+        if f"{service}.{namespace}" in job_config.get_registrations()
+    )
 
 
 def get_matching_appids(
@@ -1455,10 +1444,16 @@ def get_marathon_apps_with_clients(
 ) -> Sequence[Tuple[MarathonApp, MarathonClient]]:
     marathon_apps_with_clients: List[Tuple[MarathonApp, MarathonClient]] = []
     for client in clients:
-        for app in get_all_marathon_apps(
-            client, service_name, instance_name=instance_name, embed_tasks=embed_tasks
-        ):
-            marathon_apps_with_clients.append((app, client))
+        marathon_apps_with_clients.extend(
+            (app, client)
+            for app in get_all_marathon_apps(
+                client,
+                service_name,
+                instance_name=instance_name,
+                embed_tasks=embed_tasks,
+            )
+        )
+
     return marathon_apps_with_clients
 
 
@@ -1499,15 +1494,10 @@ def kill_given_tasks(
     try:
         return client.kill_given_tasks(task_ids=task_ids, scale=scale, force=True)
     except MarathonHttpError as e:
-        # Marathon's interface is always async, so it is possible for you to see
-        # a task in the interface and kill it, yet by the time it tries to kill
-        # it, it is already gone. This is not really a failure condition, so we
-        # swallow this error.
-        if "is not valid" in e.error_message and e.status_code == 422:
-            log.debug("Probably tried to kill a task id that didn't exist. Continuing.")
-            return False
-        else:
+        if "is not valid" not in e.error_message or e.status_code != 422:
             raise
+        log.debug("Probably tried to kill a task id that didn't exist. Continuing.")
+        return False
 
 
 def is_task_healthy(
@@ -1523,10 +1513,7 @@ def is_task_healthy(
     :returns: True if healthy, False if not"""
     if task.health_check_results:
         results = [hcr.alive for hcr in task.health_check_results]
-        if require_all:
-            return all(results)
-        else:
-            return any(results)
+        return all(results) if require_all else any(results)
     return default_healthy
 
 
@@ -1542,8 +1529,7 @@ def is_old_task_missing_healthchecks(task: MarathonTask, app: MarathonApp) -> bo
         healthcheck_startup_time = datetime.timedelta(
             seconds=health_checks[0].grace_period_seconds
         ) + datetime.timedelta(seconds=health_checks[0].interval_seconds * 5)
-        is_task_old = task.started_at + healthcheck_startup_time < now_utc
-        return is_task_old
+        return task.started_at + healthcheck_startup_time < now_utc
     return False
 
 
@@ -1557,10 +1543,10 @@ def get_num_at_risk_tasks(app: MarathonApp, draining_hosts: Sequence[str]) -> in
     :returns: An integer representing the number of tasks running on at-risk hosts
     """
     hosts_tasks_running_on = [task.host for task in app.tasks]
-    num_at_risk_tasks = 0
-    for host in hosts_tasks_running_on:
-        if host in draining_hosts:
-            num_at_risk_tasks += 1
+    num_at_risk_tasks = sum(
+        host in draining_hosts for host in hosts_tasks_running_on
+    )
+
     log.debug("%s has %d tasks running on at-risk hosts." % (app.id, num_at_risk_tasks))
     return num_at_risk_tasks
 
@@ -1583,8 +1569,9 @@ def get_short_task_id(task_id: str) -> str:
 def get_instances_from_zookeeper(service: str, instance: str) -> int:
     with ZookeeperPool() as zookeeper_client:
         (instances, _) = zookeeper_client.get(
-            "%s/instances" % compose_autoscaling_zookeeper_root(service, instance)
+            f"{compose_autoscaling_zookeeper_root(service, instance)}/instances"
         )
+
         return int(instances)
 
 

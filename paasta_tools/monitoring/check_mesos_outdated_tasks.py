@@ -53,15 +53,11 @@ def get_mesos_state():
 def marathon_tasks(state):
     for framework in state.get("frameworks", []):
         if framework["name"].lower().startswith(FRAMEWORK_NAME):
-            for task in framework.get("tasks", []):
-                yield task
+            yield from framework.get("tasks", [])
 
 
 def create_slave_id_to_hostname_dict(state):
-    res = {}
-    for slave in state["slaves"]:
-        res[slave["id"]] = slave["hostname"]
-    return res
+    return {slave["id"]: slave["hostname"] for slave in state["slaves"]}
 
 
 def group_running_tasks_by_id_and_gitsha(state):
@@ -99,9 +95,8 @@ def report_outdated_instances(task_id, gitsha, tasks, slave_id2hostname):
         deploy_time = datetime.datetime.fromtimestamp(
             int(t["statuses"][0]["timestamp"])
         ).strftime("%Y-%m-%d %H:%M:%S")
-        container_name = "mesos-{}.{}".format(
-            t["slave_id"], t["statuses"][0]["container_status"]["container_id"]["value"]
-        )
+        container_name = f'mesos-{t["slave_id"]}.{t["statuses"][0]["container_status"]["container_id"]["value"]}'
+
         hostname = slave_id2hostname[t["slave_id"]]
         hostname = hostname[: hostname.find(".")]
         service_instance = task_id.replace("--", "_")
@@ -140,9 +135,9 @@ def main():
     output, remedy = check_mesos_tasks(args.bounce_time)
     if output:
         print(
-            "CRITICAL - There are {} tasks running in {} that are more than {}h older than their"
-            " last bounce.".format(len(output), cluster, args.bounce_time)
+            f"CRITICAL - There are {len(output)} tasks running in {cluster} that are more than {args.bounce_time}h older than their last bounce."
         )
+
         print(
             OUTPUT_FORMAT.format(
                 "SERVICE.INSTANCE", "COMMIT", "CREATED", "HOSTNAME", "CONTAINER"

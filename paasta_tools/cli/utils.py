@@ -111,7 +111,7 @@ def success(msg):
     :param msg: a string
     :return: a beautiful string
     """
-    return "{} {}".format(check_mark(), msg)
+    return f"{check_mark()} {msg}"
 
 
 def failure(msg, link):
@@ -120,7 +120,7 @@ def failure(msg, link):
     :param msg: a string
     :return: a beautiful string
     """
-    return "{} {} {}".format(x_mark(), msg, PaastaColors.blue(link))
+    return f"{x_mark()} {msg} {PaastaColors.blue(link)}"
 
 
 class PaastaCheckMessages:
@@ -263,9 +263,8 @@ class PaastaCheckMessages:
 
     @staticmethod
     def service_dir_found(service, soa_dir):
-        message = "yelpsoa-config directory for {} found in {}".format(
-            PaastaColors.cyan(service), soa_dir
-        )
+        message = f"yelpsoa-config directory for {PaastaColors.cyan(service)} found in {soa_dir}"
+
         return success(message)
 
     @staticmethod
@@ -304,9 +303,7 @@ class NoSuchService(Exception):
 
     def __str__(self):
         if self.service:
-            return "SERVICE: {} {}".format(
-                PaastaColors.cyan(self.service), self.CHECK_ERROR_MSG
-            )
+            return f"SERVICE: {PaastaColors.cyan(self.service)} {self.CHECK_ERROR_MSG}"
         else:
             return self.GUESS_ERROR_MSG
 
@@ -334,21 +331,24 @@ def list_paasta_services(soa_dir: str = DEFAULT_SOA_DIR):
     """Returns a sorted list of services that happen to have at
     least one service.instance, which indicates it is on PaaSTA
     """
-    the_list = []
-    for service in list_services(soa_dir):
-        if list_all_instances_for_service(service, soa_dir=soa_dir):
-            the_list.append(service)
-    return the_list
+    return [
+        service
+        for service in list_services(soa_dir)
+        if list_all_instances_for_service(service, soa_dir=soa_dir)
+    ]
 
 
 def list_service_instances(soa_dir: str = DEFAULT_SOA_DIR):
     """Returns a sorted list of service<SPACER>instance names"""
     the_list = []
     for service in list_services(soa_dir):
-        for instance in list_all_instances_for_service(
-            service=service, soa_dir=soa_dir
-        ):
-            the_list.append(compose_job_id(service, instance))
+        the_list.extend(
+            compose_job_id(service, instance)
+            for instance in list_all_instances_for_service(
+                service=service, soa_dir=soa_dir
+            )
+        )
+
     return the_list
 
 
@@ -419,7 +419,7 @@ class NoMasterError(Exception):
 def connectable_master(cluster: str, system_paasta_config: SystemPaastaConfig) -> str:
     masters, output = calculate_remote_masters(cluster, system_paasta_config)
     if masters == []:
-        raise NoMasterError("ERROR: %s" % output)
+        raise NoMasterError(f"ERROR: {output}")
 
     random.shuffle(masters)
 
@@ -437,13 +437,13 @@ def check_ssh_on_master(master, timeout=10):
     with sudo to verify that ssh and sudo work properly. Return a tuple of the
     success status (True or False) and any output from attempting the check.
     """
-    check_command = "ssh -A -n -o StrictHostKeyChecking=no %s /bin/true" % master
+    check_command = f"ssh -A -n -o StrictHostKeyChecking=no {master} /bin/true"
     rc, output = _run(check_command, timeout=timeout)
     if rc == 0:
         return (True, None)
     if rc == 255:  # ssh error
         reason = "Return code was %d which probably means an ssh failure." % rc
-        hint = "HINT: Are you allowed to ssh to this machine %s?" % master
+        hint = f"HINT: Are you allowed to ssh to this machine {master}?"
     if rc == 1:  # sudo error
         reason = "Return code was %d which probably means a sudo failure." % rc
         hint = "HINT: Is your ssh agent forwarded? (ssh-add -l)"
@@ -478,7 +478,7 @@ def get_paasta_metastatus_cmd_args(
     use_mesos_cache: bool = False,
 ) -> Tuple[Sequence[str], int]:
     if verbose > 0:
-        verbose_arg = ["-%s" % ("v" * verbose)]
+        verbose_arg = [f'-{"v" * verbose}']
         timeout = 120
     else:
         verbose_arg = []
@@ -505,11 +505,8 @@ def run_paasta_metastatus(
         autoscaling_info=autoscaling_info,
         use_mesos_cache=use_mesos_cache,
     )
-    command = (
-        "ssh -A -n -o StrictHostKeyChecking=no {} sudo paasta_metastatus {}".format(
-            master, " ".join(cmd_args)
-        )
-    ).strip()
+    command = f'ssh -A -n -o StrictHostKeyChecking=no {master} sudo paasta_metastatus {" ".join(cmd_args)}'.strip()
+
     return_code, output = _run(command, timeout=timeout)
     return return_code, output
 
@@ -518,11 +515,7 @@ def run_paasta_cluster_boost(master, action, pool, duration, override, boost, ve
     timeout = 20
 
     verbose_flag: Optional[str]
-    if verbose > 0:
-        verbose_flag = "-{}".format("v" * verbose)
-    else:
-        verbose_flag = None
-
+    verbose_flag = f'-{"v" * verbose}' if verbose > 0 else None
     pool_flag = f"--pool {pool}"
     duration_flag = f"--duration {duration}" if duration is not None else ""
     boost_flag = f"--boost {boost}" if boost is not None else ""
@@ -534,11 +527,8 @@ def run_paasta_cluster_boost(master, action, pool, duration, override, boost, ve
             [action, pool_flag, duration_flag, boost_flag, override_flag, verbose_flag],
         )
     )
-    command = (
-        "ssh -A -n -o StrictHostKeyChecking=no {} paasta_cluster_boost {}".format(
-            master, cmd_args
-        )
-    ).strip()
+    command = f"ssh -A -n -o StrictHostKeyChecking=no {master} paasta_cluster_boost {cmd_args}".strip()
+
     return_code, output = _run(command, timeout=timeout)
     return return_code, output
 
@@ -590,7 +580,7 @@ def execute_paasta_cluster_boost_on_remote_master(
     for cluster in result:
         code = result[cluster][0]
         output = result[cluster][1]
-        if not code == 0:
+        if code != 0:
             aggregated_code = 1
         aggregated_output += f"\n{cluster}: \n{output}\n"
     return (aggregated_code, aggregated_output)
@@ -650,10 +640,11 @@ def run_on_master(
         "-t",
         "-A",
         master,
-        "sudo /bin/bash -c %s" % quote(" ".join(cmd_parts)),
+        f'sudo /bin/bash -c {quote(" ".join(cmd_parts))}',
     ]
 
-    log.debug("Running %s" % " ".join(cmd_parts))
+
+    log.debug(f'Running {" ".join(cmd_parts)}')
 
     return _run(
         cmd_parts,
@@ -690,7 +681,7 @@ def get_jenkins_build_output_url():
     """
     build_output = os.environ.get("BUILD_URL")
     if build_output:
-        build_output = build_output + "console"
+        build_output = f"{build_output}console"
     return build_output
 
 
@@ -812,9 +803,9 @@ def get_instance_config(
     instance_config_loader = INSTANCE_TYPE_HANDLERS[instance_type].loader
     if instance_config_loader is None:
         raise NotImplementedError(
-            "instance is %s of type %s which is not supported by paasta"
-            % (instance, instance_type)
+            f"instance is {instance} of type {instance_type} which is not supported by paasta"
         )
+
 
     return instance_config_loader(
         service=service,
@@ -885,7 +876,7 @@ def short_to_full_git_sha(short, refs):
 def validate_short_git_sha(value):
     pattern = re.compile("[a-f0-9]{4,40}")
     if not pattern.match(value):
-        raise argparse.ArgumentTypeError("%s is not a valid git sha" % value)
+        raise argparse.ArgumentTypeError(f"{value} is not a valid git sha")
     return value
 
 
@@ -893,8 +884,9 @@ def validate_full_git_sha(value):
     pattern = re.compile("[a-f0-9]{40}")
     if not pattern.match(value):
         raise argparse.ArgumentTypeError(
-            "%s is not a full git sha, and PaaSTA needs the full sha" % value
+            f"{value} is not a full git sha, and PaaSTA needs the full sha"
         )
+
     return value
 
 
@@ -967,9 +959,8 @@ def get_subparser(subparsers, function, command, help_text, description):
 def pick_slave_from_status(status, host=None):
     if host:
         return host
-    else:
-        slaves = status.marathon.slaves
-        return slaves[0]
+    slaves = status.marathon.slaves
+    return slaves[0]
 
 
 def get_instance_configs_for_service(
@@ -1011,8 +1002,7 @@ def get_instance_configs_for_service(
 
 
 def get_container_name(task):
-    container_name = "mesos-{}".format(task.executor["container"])
-    return container_name
+    return f'mesos-{task.executor["container"]}'
 
 
 def pick_random_port(service_name):
@@ -1084,24 +1074,18 @@ def verify_instances(
                 instance, service_instances, n=5, cutoff=0.5
             )
             suggestions.extend(matches)  # type: ignore
-        suggestions = list(set(suggestions))
-
         if clusters:
-            message = "{} doesn't have any instances matching {} on {}.".format(
-                service,
-                ", ".join(sorted(misspelled_instances)),
-                ", ".join(sorted(clusters)),
-            )
+            message = f"""{service} doesn't have any instances matching {", ".join(sorted(misspelled_instances))} on {", ".join(sorted(clusters))}."""
+
         else:
-            message = "{} doesn't have any instances matching {}.".format(
-                service, ", ".join(sorted(misspelled_instances))
-            )
+            message = f"""{service} doesn't have any instances matching {", ".join(sorted(misspelled_instances))}."""
+
 
         print(PaastaColors.red(message))
 
-        if suggestions:
+        if suggestions := list(set(suggestions)):
             print("Did you mean any of these?")
             for instance in sorted(suggestions):
-                print("  %s" % instance)
+                print(f"  {instance}")
 
     return misspelled_instances

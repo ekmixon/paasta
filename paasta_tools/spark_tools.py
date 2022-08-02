@@ -9,9 +9,13 @@ def get_webui_url(port: str) -> str:
 
 
 def inject_spark_conf_str(original_docker_cmd: str, spark_conf_str: str) -> str:
-    for base_cmd in ("pyspark", "spark-shell", "spark-submit"):
-        if base_cmd in original_docker_cmd:
-            return original_docker_cmd.replace(
-                base_cmd, base_cmd + " " + spark_conf_str, 1
+    return next(
+        (
+            original_docker_cmd.replace(
+                base_cmd, f"{base_cmd} {spark_conf_str}", 1
             )
-    return original_docker_cmd
+            for base_cmd in ("pyspark", "spark-shell", "spark-submit")
+            if base_cmd in original_docker_cmd
+        ),
+        original_docker_cmd,
+    )

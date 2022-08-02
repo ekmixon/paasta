@@ -104,4 +104,4 @@ def paasta_status_via_api(context, service, instance):
     print()  # sacrificial line for behave to eat instead of our output
 
     assert exit_code == 0
-    assert len(output) > 0
+    assert output

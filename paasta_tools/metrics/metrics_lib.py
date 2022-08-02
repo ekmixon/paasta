@@ -86,13 +86,13 @@ class MeteoriteMetrics(BaseMetrics):
             )
 
     def create_timer(self, name: str, **kwargs: Any) -> TimerProtocol:
-        return yelp_meteorite.create_timer(self.base_name + "." + name, kwargs)
+        return yelp_meteorite.create_timer(f"{self.base_name}.{name}", kwargs)
 
     def create_gauge(self, name: str, **kwargs: Any) -> GaugeProtocol:
-        return yelp_meteorite.create_gauge(self.base_name + "." + name, kwargs)
+        return yelp_meteorite.create_gauge(f"{self.base_name}.{name}", kwargs)
 
     def create_counter(self, name: str, **kwargs: Any) -> CounterProtocol:
-        return yelp_meteorite.create_counter(self.base_name + "." + name, kwargs)
+        return yelp_meteorite.create_counter(f"{self.base_name}.{name}", kwargs)
 
 
 class Timer(TimerProtocol):
@@ -100,10 +100,10 @@ class Timer(TimerProtocol):
         self.name = name
 
     def start(self) -> None:
-        log.debug("timer {} start at {}".format(self.name, time.time()))
+        log.debug(f"timer {self.name} start at {time.time()}")
 
     def stop(self) -> None:
-        log.debug("timer {} stop at {}".format(self.name, time.time()))
+        log.debug(f"timer {self.name} stop at {time.time()}")
 
     def record(self, value: float) -> None:
         log.debug(f"timer {self.name} record value {value}")
@@ -133,10 +133,10 @@ class NoMetrics(BaseMetrics):
         self.base_name = base_name
 
     def create_timer(self, name: str, **kwargs: Any) -> Timer:
-        return Timer(self.base_name + "." + name)
+        return Timer(f"{self.base_name}.{name}")
 
     def create_gauge(self, name: str, **kwargs: Any) -> Gauge:
-        return Gauge(self.base_name + "." + name)
+        return Gauge(f"{self.base_name}.{name}")
 
     def create_counter(self, name: str, **kwargs: Any) -> Counter:
-        return Counter(self.base_name + "." + name)
+        return Counter(f"{self.base_name}.{name}")

@@ -82,17 +82,17 @@ class Rule(_RuleBase):
         for param_name, param_value in sorted(rule.target.get_all_parameters().items()):
             fields["target_parameters"] += ((param_name, tuple(param_value)),)
 
-        matches = []
-        for match in rule.matches:
-            matches.append(
-                (
-                    match.name,
-                    tuple(
-                        (param, tuple(value))
-                        for param, value in sorted(match.get_all_parameters().items())
-                    ),
-                )
+        matches = [
+            (
+                match.name,
+                tuple(
+                    (param, tuple(value))
+                    for param, value in sorted(match.get_all_parameters().items())
+                ),
             )
+            for match in rule.matches
+        ]
+
         # ensure that matches are sorted for consistency with matching
         fields["matches"] = tuple(sorted(matches))
 
@@ -161,8 +161,7 @@ def ensure_chain(chain, rules):
         if rule not in current_rules:
             insert_rule(chain, rule)
 
-    extra_rules = current_rules - set(rules)
-    if extra_rules:
+    if extra_rules := current_rules - set(rules):
         delete_rules(chain, extra_rules)
 
 

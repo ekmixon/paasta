@@ -104,8 +104,8 @@ def get_authors(git_url, from_sha, to_sha):
     matches = re.match("(?P<git_server>.*):(?P<git_repo>.*)", git_url)
     if matches is None:
         return (1, f"could not understand the git url {git_url} for authors detection")
-    git_server = matches.group("git_server")
-    git_repo = matches.group("git_repo")
+    git_server = matches["git_server"]
+    git_repo = matches["git_repo"]
     if git_server is None:
         return (
             1,

@@ -250,8 +250,5 @@ def tasks_on_that_at_risk_host_drained(context, number):
 def tasks_on_host_drained(context, number, host):
     app_id = context.new_id
     tasks = context.current_client.list_tasks(app_id)
-    count = 0
-    for task in tasks:
-        if task.host == host:
-            count += 1
+    count = sum(task.host == host for task in tasks)
     assert count == number

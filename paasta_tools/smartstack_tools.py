@@ -85,8 +85,7 @@ def retrieve_haproxy_csv(
     haproxy_request.mount("https://", requests.adapters.HTTPAdapter(max_retries=3))
     haproxy_response = haproxy_request.get(synapse_uri, timeout=1)
     haproxy_data = haproxy_response.text
-    reader = csv.DictReader(haproxy_data.splitlines())
-    return reader
+    return csv.DictReader(haproxy_data.splitlines())
 
 
 def get_backends(
@@ -103,10 +102,7 @@ def get_backends(
     :returns backends: A list of dicts representing the backends of all
                        services or the requested service
     """
-    if service:
-        services = [service]
-    else:
-        services = None
+    services = [service] if service else None
     return get_multiple_backends(
         services,
         synapse_host=synapse_host,
@@ -360,15 +356,15 @@ def get_registered_marathon_tasks(
         synapse_port=synapse_port,
         synapse_haproxy_url_format=synapse_haproxy_url_format,
     )
-    healthy_tasks = []
-    for backend, task in match_backends_and_tasks(backends, marathon_tasks):
+    return [
+        task
+        for backend, task in match_backends_and_tasks(backends, marathon_tasks)
         if (
             backend is not None
             and task is not None
             and backend["status"].startswith("UP")
-        ):
-            healthy_tasks.append(task)
-    return healthy_tasks
+        )
+    ]
 
 
 def are_services_up_on_ip_port(
@@ -430,14 +426,14 @@ def match_backends_and_tasks(
     for task in tasks:
         ip = socket.gethostbyname(task.host)
         for port in task.ports:
-            for backend in backends_by_ip_port.pop((ip, port), [None]):
-                backend_task_pairs.append((backend, task))
+            backend_task_pairs.extend(
+                (backend, task)
+                for backend in backends_by_ip_port.pop((ip, port), [None])
+            )
 
     # we've been popping in the above loop, so anything left didn't match a marathon task.
     for backends in backends_by_ip_port.values():
-        for backend in backends:
-            backend_task_pairs.append((backend, None))
-
+        backend_task_pairs.extend((backend, None) for backend in backends)
     return backend_task_pairs
 
 
@@ -465,14 +461,13 @@ def match_backends_and_pods(
 
     for pod in pods:
         ip = pod.status.pod_ip
-        for backend in backends_by_ip.pop(ip, [None]):
-            backend_pod_pairs.append((backend, pod))
+        backend_pod_pairs.extend(
+            (backend, pod) for backend in backends_by_ip.pop(ip, [None])
+        )
 
     # we've been popping in the above loop, so anything left didn't match a k8s pod.
     for backends in backends_by_ip.values():
-        for backend in backends:
-            backend_pod_pairs.append((backend, None))
-
+        backend_pod_pairs.extend((backend, None) for backend in backends)
     return backend_pod_pairs
 
 
@@ -616,11 +611,8 @@ class BaseReplicationChecker(ReplicationChecker):
     def get_hostnames_in_pool(
         self, hosts: Sequence[DiscoveredHost], pool: str
     ) -> Sequence[str]:
-        hostnames = []
-        for host in hosts:
-            if host.pool == pool:
-                hostnames.append(host.hostname)
-        if len(hostnames) == 0:
+        hostnames = [host.hostname for host in hosts if host.pool == pool]
+        if not hostnames:
             hostnames.append(hosts[0].hostname)
         return hostnames
 
@@ -702,15 +694,15 @@ class MesosSmartstackEnvoyReplicationChecker(BaseReplicationChecker):
         attribute_to_slaves = mesos_tools.get_mesos_slaves_grouped_by_attribute(
             slaves=self._mesos_slaves, attribute=discover_location_type
         )
-        ret: Dict[str, Sequence[DiscoveredHost]] = {}
-        for attr, slaves in attribute_to_slaves.items():
-            ret[attr] = [
+        return {
+            attr: [
                 DiscoveredHost(
                     hostname=slave["hostname"], pool=slave["attributes"]["pool"]
                 )
                 for slave in slaves
             ]
-        return ret
+            for attr, slaves in attribute_to_slaves.items()
+        }
 
 
 class KubeSmartstackEnvoyReplicationChecker(BaseReplicationChecker):
@@ -737,16 +729,16 @@ class KubeSmartstackEnvoyReplicationChecker(BaseReplicationChecker):
         attribute_to_nodes = kubernetes_tools.get_nodes_grouped_by_attribute(
             nodes=self.nodes, attribute=discover_location_type
         )
-        ret: Dict[str, Sequence[DiscoveredHost]] = {}
-        for attr, nodes in attribute_to_nodes.items():
-            ret[attr] = [
+        return {
+            attr: [
                 DiscoveredHost(
                     hostname=node.metadata.labels["yelp.com/hostname"],
                     pool=node.metadata.labels["yelp.com/pool"],
                 )
                 for node in nodes
             ]
-        return ret
+            for attr, nodes in attribute_to_nodes.items()
+        }
 
 
 def build_smartstack_location_dict(
@@ -799,8 +791,7 @@ def build_smartstack_backend_dict(
         "has_associated_task": task is not None,
     }
 
-    check_duration = smartstack_backend["check_duration"]
-    if check_duration:
+    if check_duration := smartstack_backend["check_duration"]:
         smartstack_backend_dict["check_duration"] = int(check_duration)
 
     return smartstack_backend_dict

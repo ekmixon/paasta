@@ -57,8 +57,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-n", "--dry-run", action="store_true", dest="dry_run", default=False
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def get_evicted_pods(pods: Sequence[V1Pod]) -> Sequence[V1Pod]:
@@ -110,7 +109,7 @@ def remove_pods(
     delete_options = V1DeleteOptions()
     for service in services:
         # Do not remove more than 2 pods per run
-        for pod in services[service][0:2]:
+        for pod in services[service][:2]:
             if dry_run:
                 log.info(f"Would have removed pod {pod.podname}")
             else:
@@ -130,8 +129,7 @@ def evicted_pods_per_service(client: KubeClient,) -> Mapping[str, Sequence[Evict
     log.info(f"Pods in evicted state: {[pod.metadata.name for pod in evicted_pods]}")
     evicted_pods_aggregated: Dict[str, List[EvictedPod]] = defaultdict(list)
     for pod in evicted_pods:
-        service = get_pod_service(pod)
-        if service:
+        if service := get_pod_service(pod):
             evicted_pods_aggregated[service].append(
                 EvictedPod(
                     pod.metadata.name, pod.metadata.namespace, pod.status.message

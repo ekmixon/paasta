@@ -101,16 +101,16 @@ def list_deploy_queue(args) -> int:
 
 
 def format_deploy_queues(deploy_queues, cluster: str) -> str:
-    lines = [
-        f"Deploy Queue for Cluster {cluster}",
-        "  Available Service Instances:",
-    ]
     available_instances_table = create_queue_entries_table(
         deploy_queues.available_service_instances
     )
-    lines.extend([f"    {line}" for line in available_instances_table])
+    lines = [
+        f"Deploy Queue for Cluster {cluster}",
+        "  Available Service Instances:",
+        *[f"    {line}" for line in available_instances_table],
+        "  Unavailable Service Instances:",
+    ]
 
-    lines.append("  Unavailable Service Instances:")
     unavailable_instances_table = create_queue_entries_table(
         deploy_queues.unavailable_service_instances
     )

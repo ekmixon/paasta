@@ -60,10 +60,11 @@ def main(argv):
         schedulers.append(scheduler)
 
         driver = create_driver(
-            framework_name="paasta_native %s" % compose_job_id(service, instance),
+            framework_name=f"paasta_native {compose_job_id(service, instance)}",
             scheduler=scheduler,
             system_paasta_config=system_paasta_config,
         )
+
         driver.start()
         drivers.append(driver)
 

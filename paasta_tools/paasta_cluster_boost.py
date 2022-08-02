@@ -112,8 +112,6 @@ def paasta_cluster_boost(
 
         else:
             raise NotImplementedError("Action: '%s' is not implemented." % action)
-            return False
-
         print(
             "Current boost value for path: {}: {}".format(
                 zk_boost_path, load_boost.get_boost_factor(zk_boost_path=zk_boost_path)

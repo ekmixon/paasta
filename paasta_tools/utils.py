@@ -327,7 +327,7 @@ class DockerParameter(TypedDict):
 
 
 def safe_deploy_blacklist(input: UnsafeDeployBlacklist) -> DeployBlacklist:
-    return [(t, l) for t, l in input]
+    return list(input)
 
 
 def safe_deploy_whitelist(input: UnsafeDeployWhitelist) -> DeployWhitelist:
@@ -427,8 +427,7 @@ class InstanceConfig:
         Defaults to 4096 (4G) if no value specified in the config.
 
         :returns: The amount of memory specified by the config, 4096 if not specified"""
-        mem = self.config_dict.get("mem", 4096)
-        return mem
+        return self.config_dict.get("mem", 4096)
 
     def get_mem_swap(self) -> str:
         """Gets the memory-swap value. This value is passed to the docker
@@ -439,7 +438,7 @@ class InstanceConfig:
         """
         mem = self.get_mem()
         mem_swap = int(math.ceil(mem + 64))
-        return "%sm" % mem_swap
+        return f"{mem_swap}m"
 
     def get_cpus(self) -> float:
         """Gets the number of cpus required from the service's configuration.
@@ -447,8 +446,7 @@ class InstanceConfig:
         Defaults to 1 cpu if no value specified in the config.
 
         :returns: The number of cpus specified in the config, 1 if not specified"""
-        cpus = self.config_dict.get("cpus", 1)
-        return cpus
+        return self.config_dict.get("cpus", 1)
 
     def get_cpu_burst_add(self) -> float:
         """Returns the number of additional cpus a container is allowed to use.
@@ -506,9 +504,10 @@ class InstanceConfig:
         :returns: A list of parameters to be added to docker run"""
         parameters: List[DockerParameter] = [
             {"key": "memory-swap", "value": self.get_mem_swap()},
-            {"key": "cpu-period", "value": "%s" % int(self.get_cpu_period())},
-            {"key": "cpu-quota", "value": "%s" % int(self.get_cpu_quota())},
+            {"key": "cpu-period", "value": f"{int(self.get_cpu_period())}"},
+            {"key": "cpu-quota", "value": f"{int(self.get_cpu_quota())}"},
         ]
+
         if self.use_docker_disk_quota(system_paasta_config=system_paasta_config):
             parameters.append(
                 {
@@ -519,12 +518,12 @@ class InstanceConfig:
         if with_labels:
             parameters.extend(
                 [
-                    {"key": "label", "value": "paasta_service=%s" % self.service},
-                    {"key": "label", "value": "paasta_instance=%s" % self.instance},
+                    {"key": "label", "value": f"paasta_service={self.service}"},
+                    {"key": "label", "value": f"paasta_instance={self.instance}"},
                 ]
             )
-        extra_docker_args = self.get_extra_docker_args()
-        if extra_docker_args:
+
+        if extra_docker_args := self.get_extra_docker_args():
             for key, value in extra_docker_args.items():
                 parameters.extend([{"key": key, "value": value}])
         parameters.extend(self.get_cap_add())
@@ -548,8 +547,7 @@ class InstanceConfig:
         Defaults to 1024 (1GiB) if no value is specified in the config.
 
         :returns: The amount of disk space specified by the config, 1024 MiB if not specified"""
-        disk = self.config_dict.get("disk", default)
-        return disk
+        return self.config_dict.get("disk", default)
 
     def get_gpus(self) -> Optional[int]:
         """Gets the number of gpus required from the service's configuration.
@@ -557,8 +555,7 @@ class InstanceConfig:
         Default to None if no value is specified in the config.
 
         :returns: The number of gpus specified by the config, 0 if not specified"""
-        gpus = self.config_dict.get("gpus", None)
-        return gpus
+        return self.config_dict.get("gpus", None)
 
     def get_container_type(self) -> Optional[str]:
         """Get Mesos containerizer type.
@@ -566,11 +563,7 @@ class InstanceConfig:
         Default to DOCKER if gpus are not used.
 
         :returns: Mesos containerizer type, DOCKER or MESOS"""
-        if self.get_gpus() is not None:
-            container_type = "MESOS"
-        else:
-            container_type = "DOCKER"
-        return container_type
+        return "MESOS" if self.get_gpus() is not None else "DOCKER"
 
     def get_cmd(self) -> Optional[Union[str, List[str]]]:
         """Get the docker cmd specified in the service's configuration.
@@ -600,20 +593,16 @@ class InstanceConfig:
         }
         if self.get_gpus() is not None:
             env["PAASTA_RESOURCE_GPUS"] = str(self.get_gpus())
-        try:
+        with contextlib.suppress(Exception):
             env["PAASTA_GIT_SHA"] = get_git_sha_from_dockerurl(
                 self.get_docker_url(system_paasta_config=system_paasta_config)
             )
-        except Exception:
-            pass
-        team = self.get_team()
-        if team:
+        if team := self.get_team():
             env["PAASTA_MONITORING_TEAM"] = team
-        instance_type = self.get_instance_type()
-        if instance_type:
+        if instance_type := self.get_instance_type():
             env["PAASTA_INSTANCE_TYPE"] = instance_type
         user_env = self.config_dict.get("env", {})
-        env.update(user_env)
+        env |= user_env
         return {str(k): str(v) for (k, v) in env.items()}
 
     def get_env(
@@ -637,15 +626,14 @@ class InstanceConfig:
             otherwise None if not specified but cmd is specified"""
         if self.get_cmd() is None:
             return self.config_dict.get("args", [])
+        args = self.config_dict.get("args", None)
+        if args is None:
+            return args
         else:
-            args = self.config_dict.get("args", None)
-            if args is None:
-                return args
-            else:
-                # TODO validation stuff like this should be moved into a check_*
-                raise InvalidInstanceConfig(
-                    "Instance configuration can specify cmd or args, but not both."
-                )
+            # TODO validation stuff like this should be moved into a check_*
+            raise InvalidInstanceConfig(
+                "Instance configuration can specify cmd or args, but not both."
+            )
 
     def get_monitoring(self) -> MonitoringDict:
         """Get monitoring overrides defined for the given instance"""
@@ -683,10 +671,7 @@ class InstanceConfig:
     def get_docker_image(self) -> str:
         """Get the docker image name (with tag) for a given service branch from
         a generated deployments.json file."""
-        if self.branch_dict is not None:
-            return self.branch_dict["docker_image"]
-        else:
-            return ""
+        return self.branch_dict["docker_image"] if self.branch_dict is not None else ""
 
     def get_docker_url(
         self, system_paasta_config: Optional["SystemPaastaConfig"] = None
@@ -697,13 +682,12 @@ class InstanceConfig:
         registry_uri = self.get_docker_registry(
             system_paasta_config=system_paasta_config
         )
-        docker_image = self.get_docker_image()
-        if not docker_image:
+        if docker_image := self.get_docker_image():
+            return f"{registry_uri}/{docker_image}"
+        else:
             raise NoDockerImageError(
                 "Docker url not available because there is no docker_image"
             )
-        docker_url = f"{registry_uri}/{docker_image}"
-        return docker_url
 
     def get_desired_state(self) -> str:
         """Get the desired state (either 'start' or 'stop') for a given service
@@ -720,39 +704,33 @@ class InstanceConfig:
         parameters have changed. This may be None or a string, generally a
         timestamp.
         """
-        if self.branch_dict is not None:
-            return self.branch_dict["force_bounce"]
-        else:
-            return None
+        return None if self.branch_dict is None else self.branch_dict["force_bounce"]
 
     def check_cpus(self) -> Tuple[bool, str]:
         cpus = self.get_cpus()
-        if cpus is not None:
-            if not isinstance(cpus, (float, int)):
-                return (
-                    False,
-                    'The specified cpus value "%s" is not a valid float or int.' % cpus,
-                )
+        if cpus is not None and not isinstance(cpus, (float, int)):
+            return (
+                False,
+                'The specified cpus value "%s" is not a valid float or int.' % cpus,
+            )
         return True, ""
 
     def check_mem(self) -> Tuple[bool, str]:
         mem = self.get_mem()
-        if mem is not None:
-            if not isinstance(mem, (float, int)):
-                return (
-                    False,
-                    'The specified mem value "%s" is not a valid float or int.' % mem,
-                )
+        if mem is not None and not isinstance(mem, (float, int)):
+            return (
+                False,
+                'The specified mem value "%s" is not a valid float or int.' % mem,
+            )
         return True, ""
 
     def check_disk(self) -> Tuple[bool, str]:
         disk = self.get_disk()
-        if disk is not None:
-            if not isinstance(disk, (float, int)):
-                return (
-                    False,
-                    'The specified disk value "%s" is not a valid float or int.' % disk,
-                )
+        if disk is not None and not isinstance(disk, (float, int)):
+            return (
+                False,
+                'The specified disk value "%s" is not a valid float or int.' % disk,
+            )
         return True, ""
 
     def check_security(self) -> Tuple[bool, str]:
@@ -784,11 +762,10 @@ class InstanceConfig:
                 'Unrecognized outbound_firewall value "%s"' % outbound_firewall,
             )
 
-        unknown_keys = set(security.keys()) - {
+        if unknown_keys := set(security.keys()) - {
             "inbound_firewall",
             "outbound_firewall",
-        }
-        if unknown_keys:
+        }:
             return (
                 False,
                 'Unrecognized items in security dict of service config: "%s"'
@@ -950,9 +927,7 @@ class InstanceConfig:
 
         :returns: A string specified in the config, None if not specified"""
         security = self.config_dict.get("security")
-        if not security:
-            return None
-        return security.get("inbound_firewall")
+        return security.get("inbound_firewall") if security else None
 
     def get_outbound_firewall(self) -> Optional[str]:
         """Return 'block', 'monitor', or None as configured in security->outbound_firewall
@@ -961,9 +936,7 @@ class InstanceConfig:
 
         :returns: A string specified in the config, None if not specified"""
         security = self.config_dict.get("security")
-        if not security:
-            return None
-        return security.get("outbound_firewall")
+        return security.get("outbound_firewall") if security else None
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, type(self)):
@@ -985,9 +958,7 @@ def stringify_constraint(usc: UnstringifiedConstraint) -> Constraint:
 def stringify_constraints(
     uscs: Optional[List[UnstringifiedConstraint]],
 ) -> List[Constraint]:
-    if uscs is None:
-        return None
-    return [stringify_constraint(usc) for usc in uscs]
+    return None if uscs is None else [stringify_constraint(usc) for usc in uscs]
 
 
 @time_cache(ttl=60)
@@ -1005,12 +976,11 @@ def validate_service_instance(
         if (service, instance) in sis:
             return instance_type
         possibilities.extend(si[1] for si in sis)
-    else:
-        suggestions = suggest_possibilities(word=instance, possibilities=possibilities)
-        raise NoConfigurationForServiceError(
-            f"Error: {compose_job_id(service, instance)} doesn't look like it has been configured "
-            f"to run on the {cluster} cluster.{suggestions}"
-        )
+    suggestions = suggest_possibilities(word=instance, possibilities=possibilities)
+    raise NoConfigurationForServiceError(
+        f"Error: {compose_job_id(service, instance)} doesn't look like it has been configured "
+        f"to run on the {cluster} cluster.{suggestions}"
+    )
 
 
 _ComposeRetT = TypeVar("_ComposeRetT")
@@ -1429,7 +1399,7 @@ def format_log_line(
     if not timestamp:
         timestamp = _now()
     line = remove_ansi_escape_sequences(line.strip())
-    message = json.dumps(
+    return json.dumps(
         {
             "timestamp": timestamp,
             "level": level,
@@ -1441,7 +1411,6 @@ def format_log_line(
         },
         sort_keys=True,
     )
-    return message
 
 
 def format_audit_log_line(
@@ -1470,7 +1439,7 @@ def format_audit_log_line(
     if not action_details:
         action_details = {}
 
-    message = json.dumps(
+    return json.dumps(
         {
             "timestamp": timestamp,
             "cluster": cluster,
@@ -1483,13 +1452,12 @@ def format_audit_log_line(
         },
         sort_keys=True,
     )
-    return message
 
 
 def get_log_name_for_service(service: str, prefix: str = None) -> str:
     if prefix:
         return f"stream_paasta_{prefix}_{service}"
-    return "stream_paasta_%s" % service
+    return f"stream_paasta_{service}"
 
 
 try:
@@ -1637,11 +1605,7 @@ class FileLogWriter(LogWriter):
         self.line_delimiter = line_delimiter
 
     def maybe_flock(self, fd: _AnyIO) -> ContextManager:
-        if self.flock:
-            # https://github.com/python/typeshed/issues/1548
-            return flock(fd)
-        else:
-            return _empty_context()
+        return flock(fd) if self.flock else _empty_context()
 
     def format_path(
         self, service: str, component: str, level: str, cluster: str, instance: str
@@ -1667,9 +1631,7 @@ class FileLogWriter(LogWriter):
                     f.write(message.encode("UTF-8"))
         except IOError as e:
             print(
-                "Could not log to {}: {}: {} -- would have logged: {}".format(
-                    path, type(e).__name__, str(e), message
-                ),
+                f"Could not log to {path}: {type(e).__name__}: {str(e)} -- would have logged: {message}",
                 file=sys.stderr,
             )
 
@@ -1683,10 +1645,8 @@ class FileLogWriter(LogWriter):
         instance: str = ANY_INSTANCE,
     ) -> None:
         path = self.format_path(service, component, level, cluster, instance)
-        to_write = "{}{}".format(
-            format_log_line(level, cluster, service, instance, component, line),
-            self.line_delimiter,
-        )
+        to_write = f"{format_log_line(level, cluster, service, instance, component, line)}{self.line_delimiter}"
+
 
         self._log_message(path, to_write)
 
@@ -1950,13 +1910,15 @@ def load_system_paasta_config(
     """
     if not os.path.isdir(path):
         raise PaastaNotConfiguredError(
-            "Could not find system paasta configuration directory: %s" % path
+            f"Could not find system paasta configuration directory: {path}"
         )
+
 
     if not os.access(path, os.R_OK):
         raise PaastaNotConfiguredError(
-            "Could not read from system paasta configuration directory: %s" % path
+            f"Could not read from system paasta configuration directory: {path}"
         )
+
 
     try:
         file_stats = frozenset(
@@ -2025,14 +1987,12 @@ class SystemPaastaConfig:
             hosts = self.config_dict["zookeeper"]
         except KeyError:
             raise PaastaNotConfiguredError(
-                "Could not find zookeeper connection string in configuration directory: %s"
-                % self.directory
+                f"Could not find zookeeper connection string in configuration directory: {self.directory}"
             )
 
+
         # how do python strings not have a method for doing this
-        if hosts.startswith("zk://"):
-            return hosts[len("zk://") :]
-        return hosts
+        return hosts[len("zk://") :] if hosts.startswith("zk://") else hosts
 
     def get_system_docker_registry(self) -> str:
         """Get the docker_registry defined in this host's cluster config file.
@@ -2043,8 +2003,7 @@ class SystemPaastaConfig:
             return self.config_dict["docker_registry"]
         except KeyError:
             raise PaastaNotConfiguredError(
-                "Could not find docker registry in configuration directory: %s"
-                % self.directory
+                f"Could not find docker registry in configuration directory: {self.directory}"
             )
 
     def get_hacheck_sidecar_volumes(self) -> List[DockerVolume]:
@@ -2056,9 +2015,9 @@ class SystemPaastaConfig:
             volumes = self.config_dict["hacheck_sidecar_volumes"]
         except KeyError:
             raise PaastaNotConfiguredError(
-                "Could not find hacheck_sidecar_volumes in configuration directory: %s"
-                % self.directory
+                f"Could not find hacheck_sidecar_volumes in configuration directory: {self.directory}"
             )
+
         return _reorder_docker_volumes(list(volumes))
 
     def get_volumes(self) -> Sequence[DockerVolume]:
@@ -2070,7 +2029,7 @@ class SystemPaastaConfig:
             return self.config_dict["volumes"]
         except KeyError:
             raise PaastaNotConfiguredError(
-                "Could not find volumes in configuration directory: %s" % self.directory
+                f"Could not find volumes in configuration directory: {self.directory}"
             )
 
     def get_cluster(self) -> str:
@@ -2082,7 +2041,7 @@ class SystemPaastaConfig:
             return self.config_dict["cluster"]
         except KeyError:
             raise PaastaNotConfiguredError(
-                "Could not find cluster in configuration directory: %s" % self.directory
+                f"Could not find cluster in configuration directory: {self.directory}"
             )
 
     def get_dashboard_links(self) -> Mapping[str, Mapping[str, str]]:
@@ -2178,8 +2137,7 @@ class SystemPaastaConfig:
             return self.config_dict["log_writer"]
         except KeyError:
             raise PaastaNotConfiguredError(
-                "Could not find log_writer in configuration directory: %s"
-                % self.directory
+                f"Could not find log_writer in configuration directory: {self.directory}"
             )
 
     def get_log_reader(self) -> LogReaderConfig:
@@ -2191,8 +2149,7 @@ class SystemPaastaConfig:
             return self.config_dict["log_reader"]
         except KeyError:
             raise PaastaNotConfiguredError(
-                "Could not find log_reader in configuration directory: %s"
-                % self.directory
+                f"Could not find log_reader in configuration directory: {self.directory}"
             )
 
     def get_metrics_provider(self) -> Optional[str]:
@@ -2720,9 +2677,7 @@ def atomic_file_write(target_path: str) -> Iterator[IO]:
     if target_path == "-":
         yield sys.stdout
     else:
-        with tempfile.NamedTemporaryFile(
-            dir=dirname, prefix=(".%s-" % basename), delete=False, mode="w"
-        ) as f:
+        with tempfile.NamedTemporaryFile(dir=dirname, prefix=f".{basename}-", delete=False, mode="w") as f:
             temp_target_path = f.name
             yield f
 
@@ -2781,7 +2736,7 @@ def decompose_job_id(job_id: str, spacer: str = SPACER) -> Tuple[str, str, str, 
         git_hash = decomposed[2]
         config_hash = decomposed[3]
     else:
-        raise InvalidJobNameError("invalid job id %s" % job_id)
+        raise InvalidJobNameError(f"invalid job id {job_id}")
     return (decomposed[0], decomposed[1], git_hash, config_hash)
 
 
@@ -2794,8 +2749,7 @@ def build_docker_image_name(service: str) -> str:
     docker image name is docker_registry/services-foo.
     """
     docker_registry_url = get_service_docker_registry(service)
-    name = f"{docker_registry_url}/services-{service}"
-    return name
+    return f"{docker_registry_url}/services-{service}"
 
 
 def build_docker_tag(service: str, upstream_git_commit: str) -> str:
@@ -2804,8 +2758,7 @@ def build_docker_tag(service: str, upstream_git_commit: str) -> str:
     upstream_git_commit is the SHA that we're building. Usually this is the
     tip of origin/master.
     """
-    tag = "{}:paasta-{}".format(build_docker_image_name(service), upstream_git_commit)
-    return tag
+    return f"{build_docker_image_name(service)}:paasta-{upstream_git_commit}"
 
 
 def check_docker_image(service: str, tag: str) -> bool:
@@ -2873,14 +2826,14 @@ def get_soa_cluster_deploy_files(
     else:
         instance_types = "|".join(INSTANCE_TYPES)
 
-    search_re = r"/.*/(" + instance_types + r")-(" + valid_clusters + r")\.yaml$"
+    search_re = f"/.*/({instance_types})-({valid_clusters}" + r")\.yaml$"
 
-    for yaml_file in glob.glob("%s/*.yaml" % service_path):
+    for yaml_file in glob.glob(f"{service_path}/*.yaml"):
         try:
             with open(yaml_file):
                 cluster_re_match = re.search(search_re, yaml_file)
                 if cluster_re_match is not None:
-                    cluster = cluster_re_match.group(2)
+                    cluster = cluster_re_match[2]
                     yield (cluster, yaml_file)
         except IOError as err:
             print(f"Error opening {yaml_file}: {err}")
@@ -2897,11 +2850,13 @@ def list_clusters(
     :param service: The service name. If unspecified, clusters running any service will be included.
     :returns: A sorted list of cluster names
     """
-    clusters = set()
-    for cluster, _ in get_soa_cluster_deploy_files(
-        service=service, soa_dir=soa_dir, instance_type=instance_type
-    ):
-        clusters.add(cluster)
+    clusters = {
+        cluster
+        for cluster, _ in get_soa_cluster_deploy_files(
+            service=service, soa_dir=soa_dir, instance_type=instance_type
+        )
+    }
+
     return sorted(clusters)
 
 
@@ -2952,8 +2907,7 @@ def read_service_instance_names(
                 instance = f"{job_name}.{name}"
                 instance_list.append((service, instance))
     else:
-        for instance in config:
-            instance_list.append((service, instance))
+        instance_list.extend((service, instance) for instance in config)
     return instance_list
 
 
@@ -3106,8 +3060,8 @@ def load_service_instance_auto_configs(
     service: str, instance_type: str, cluster: str, soa_dir: str = DEFAULT_SOA_DIR,
 ) -> Dict[str, Dict[str, Any]]:
     enabled_types = load_system_paasta_config().get_auto_config_instance_types_enabled()
-    conf_file = f"{instance_type}-{cluster}"
     if enabled_types.get(instance_type):
+        conf_file = f"{instance_type}-{cluster}"
         return service_configuration_lib.read_extra_service_information(
             service,
             f"{AUTO_SOACONFIG_SUBDIR}/{conf_file}",
@@ -3222,13 +3176,12 @@ class DeploymentsJsonV2:
         self, service: str, branch: str, deploy_group: str
     ) -> BranchDictV2:
         full_branch = f"{service}:{branch}"
-        branch_dict: BranchDictV2 = {
+        return {
             "docker_image": self.get_docker_image_for_deploy_group(deploy_group),
             "git_sha": self.get_git_sha_for_deploy_group(deploy_group),
             "desired_state": self.get_desired_state_for_branch(full_branch),
             "force_bounce": self.get_force_bounce_for_branch(full_branch),
         }
-        return branch_dict
 
     def get_deploy_groups(self) -> Collection[str]:
         return self.config_dict["deployments"].keys()
@@ -3318,7 +3271,7 @@ def get_paasta_tag(cluster: str, instance: str, desired_state: str) -> str:
 
 
 def format_tag(tag: str) -> str:
-    return "refs/tags/%s" % tag
+    return f"refs/tags/{tag}"
 
 
 class NoDockerImageError(Exception):
@@ -3340,7 +3293,7 @@ def get_config_hash(config: Any, force_bounce: str = None) -> str:
         json.dumps(config, sort_keys=True).encode("UTF-8")
         + (force_bounce or "").encode("UTF-8")
     )
-    return "config%s" % hasher.hexdigest()[:8]
+    return f"config{hasher.hexdigest()[:8]}"
 
 
 def get_git_sha_from_dockerurl(docker_url: str, long: bool = False) -> str:
@@ -3360,7 +3313,7 @@ def get_code_sha_from_dockerurl(docker_url: str) -> str:
     """
     try:
         git_sha = get_git_sha_from_dockerurl(docker_url, long=False)
-        return "git%s" % git_sha
+        return f"git{git_sha}"
     except Exception:
         return "gitUNKNOWN"
 
@@ -3380,10 +3333,7 @@ def is_under_replicated(
     else:
         ratio = (num_available / float(expected_count)) * 100
 
-    if ratio < int(crit_threshold):
-        return (True, ratio)
-    else:
-        return (False, ratio)
+    return (True, ratio) if ratio < crit_threshold else (False, ratio)
 
 
 def deploy_blacklist_to_constraints(
@@ -3396,11 +3346,10 @@ def deploy_blacklist_to_constraints(
     :param blacklist: List of lists of locations to blacklist
     :returns: List of lists of constraints
     """
-    constraints: List[Constraint] = []
-    for blacklisted_location in deploy_blacklist:
-        constraints.append([blacklisted_location[0], "UNLIKE", blacklisted_location[1]])
-
-    return constraints
+    return [
+        [blacklisted_location[0], "UNLIKE", blacklisted_location[1]]
+        for blacklisted_location in deploy_blacklist
+    ]
 
 
 def deploy_whitelist_to_constraints(
@@ -3443,9 +3392,10 @@ def format_table(
     if not list_rows:
         return cast(List[str], rows)
 
-    widths = []
-    for i in range(len(list_rows[0])):
-        widths.append(max(terminal_len(r[i]) for r in list_rows))
+    widths = [
+        max(terminal_len(r[i]) for r in list_rows)
+        for i in range(len(list_rows[0]))
+    ]
 
     expanded_rows = []
     for row in rows:
@@ -3454,10 +3404,7 @@ def format_table(
         else:
             expanded_row = []
             for i, cell in enumerate(row):
-                if i == len(row) - 1:
-                    padding = ""
-                else:
-                    padding = " " * (widths[i] - terminal_len(cell))
+                padding = "" if i == len(row) - 1 else " " * (widths[i] - terminal_len(cell))
                 expanded_row.append(cell + padding)
             expanded_rows.append(expanded_row)
 
@@ -3489,13 +3436,12 @@ def deep_merge_dictionaries(
             else:
                 if isinstance(value, dict) and isinstance(child, dict):
                     stack.append((value, child))
+                elif allow_duplicate_keys:
+                    result_dict[key] = value
                 else:
-                    if allow_duplicate_keys:
-                        result_dict[key] = value
-                    else:
-                        raise DuplicateKeyError(
-                            f"defaults and overrides both have key {key}"
-                        )
+                    raise DuplicateKeyError(
+                        f"defaults and overrides both have key {key}"
+                    )
     return result
 
 
@@ -3530,10 +3476,7 @@ class ZookeeperPool:
 
 
 def calculate_tail_lines(verbose_level: int) -> int:
-    if verbose_level <= 1:
-        return 0
-    else:
-        return 10 ** (verbose_level - 1)
+    return 0 if verbose_level <= 1 else 10 ** (verbose_level - 1)
 
 
 def is_deploy_step(step: str) -> bool:
@@ -3591,7 +3534,7 @@ def prompt_pick_one(sequence: Collection[str], choosing: str) -> str:
         )
         sys.exit(1)
 
-    global_actions = [str("quit")]
+    global_actions = ["quit"]
     choices = [(item, item) for item in sequence]
 
     if len(choices) == 1:
@@ -3599,15 +3542,16 @@ def prompt_pick_one(sequence: Collection[str], choosing: str) -> str:
 
     chooser = choice.Menu(choices=choices, global_actions=global_actions)
     chooser.title = 'Please pick a {choosing} from the choices below (or "quit" to quit):'.format(
-        choosing=str(choosing)
+        choosing=choosing
     )
+
     try:
         result = chooser.ask()
     except (KeyboardInterrupt, EOFError):
         print("")
         sys.exit(1)
 
-    if isinstance(result, tuple) and result[1] == str("quit"):
+    if isinstance(result, tuple) and result[1] == "quit":
         sys.exit(1)
     else:
         return result
@@ -3697,9 +3641,8 @@ class _Timeout:
                 ret = self.control.get()
                 if ret[0]:
                     return cast(_TimeoutFuncRetType, ret[1])
-                else:
-                    _, e, tb = cast(Tuple, ret[1])
-                    raise e.with_traceback(tb)
+                _, e, tb = cast(Tuple, ret[1])
+                raise e.with_traceback(tb)
         raise TimeoutError(self.error_message)
 
 
@@ -3732,14 +3675,12 @@ def get_possible_launched_by_user_variable_from_env() -> str:
 def load_all_configs(
     cluster: str, file_prefix: str, soa_dir: str
 ) -> Mapping[str, Mapping[str, Any]]:
-    config_dicts = {}
-    for service in os.listdir(soa_dir):
-        config_dicts[
-            service
-        ] = service_configuration_lib.read_extra_service_information(
+    return {
+        service: service_configuration_lib.read_extra_service_information(
             service, f"{file_prefix}-{cluster}", soa_dir=soa_dir
         )
-    return config_dicts
+        for service in os.listdir(soa_dir)
+    }
 
 
 def ldap_user_search(

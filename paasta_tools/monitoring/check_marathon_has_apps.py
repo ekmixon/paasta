@@ -30,11 +30,11 @@ def check_marathon_apps():
     try:
         result = assert_marathon_apps(clients)
     except (MarathonError, InternalServerError, ValueError) as e:
-        print("CRITICAL: Unable to connect to Marathon cluster: %s" % e)
+        print(f"CRITICAL: Unable to connect to Marathon cluster: {e}")
         sys.exit(2)
 
     if result.healthy:
-        print("OK: " + result.message)
+        print(f"OK: {result.message}")
         sys.exit(0)
     else:
         print(result.message)

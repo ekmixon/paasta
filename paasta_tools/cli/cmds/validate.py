@@ -105,7 +105,7 @@ def get_schema(file_type):
 
     :param file_type: what schema type should we validate against
     """
-    schema_path = "schemas/%s_schema.json" % file_type
+    schema_path = f"schemas/{file_type}_schema.json"
     try:
         schema = pkgutil.get_data("paasta_tools.cli", schema_path).decode()
     except IOError:
@@ -114,13 +114,15 @@ def get_schema(file_type):
 
 
 def validate_instance_names(config_file_object, file_path):
-    errors = []
-    for instance_name in config_file_object:
+    errors = [
+        instance_name
+        for instance_name in config_file_object
         if (
             not instance_name.startswith("_")
             and len(sanitise_kubernetes_name(instance_name)) > 63
-        ):
-            errors.append(instance_name)
+        )
+    ]
+
     if errors:
         error_string = "\n".join(errors)
         print(
@@ -130,7 +132,7 @@ def validate_instance_names(config_file_object, file_path):
                 "http://paasta.readthedocs.io/en/latest/yelpsoa_configs.html",
             )
         )
-    return len(errors) == 0
+    return not errors
 
 
 def validate_service_name(service):
@@ -190,7 +192,7 @@ def validate_schema(file_path, file_type):
         print(f"{SCHEMA_INVALID}: {file_path}")
 
         errors = validator.iter_errors(config_file_object)
-        print("  Validation Message: %s" % exceptions.best_match(errors).message)
+        print(f"  Validation Message: {exceptions.best_match(errors).message}")
     except Exception as e:
         print(f"{SCHEMA_ERROR}: {file_type}, error: {e!r}")
         return
@@ -214,9 +216,10 @@ def validate_all_schemas(service_path):
             continue
         basename = os.path.basename(file_name)
         for file_type in ["marathon", "adhoc", "tron", "kubernetes"]:
-            if basename.startswith(file_type):
-                if not validate_schema(file_name, file_type):
-                    returncode = False
+            if basename.startswith(file_type) and not validate_schema(
+                file_name, file_type
+            ):
+                returncode = False
     return returncode
 
 
@@ -251,18 +254,20 @@ def check_service_path(service_path):
     if not service_path or not os.path.isdir(service_path):
         print(
             failure(
-                "%s is not a directory" % service_path,
+                f"{service_path} is not a directory",
                 "http://paasta.readthedocs.io/en/latest/yelpsoa_configs.html",
             )
         )
+
         return False
     if not glob(os.path.join(service_path, "*.yaml")):
         print(
             failure(
-                "%s does not contain any .yaml files" % service_path,
+                f"{service_path} does not contain any .yaml files",
                 "http://paasta.readthedocs.io/en/latest/yelpsoa_configs.html",
             )
         )
+
         return False
     return True
 
@@ -275,12 +280,11 @@ def get_service_path(service, soa_dir):
     """
     if service:
         service_path = os.path.join(soa_dir, service)
+    elif soa_dir == os.getcwd():
+        service_path = os.getcwd()
     else:
-        if soa_dir == os.getcwd():
-            service_path = os.getcwd()
-        else:
-            print(UNKNOWN_SERVICE)
-            return None
+        print(UNKNOWN_SERVICE)
+        return None
     return service_path
 
 
@@ -336,13 +340,13 @@ def validate_paasta_objects(service_path):
                 soa_dir=soa_dir,
             )
             messages.extend(instance_config.validate())
-    returncode = len(messages) == 0
+    returncode = not messages
 
     if messages:
         errors = "\n".join(messages)
         print(failure((f"There were failures validating {service}: {errors}"), ""))
     else:
-        print(success(f"All PaaSTA Instances for are valid for all clusters"))
+        print(success("All PaaSTA Instances for are valid for all clusters"))
 
     return returncode
 
@@ -358,12 +362,11 @@ def validate_unique_instance_names(service_path):
         )
         instance_names = [service_instance[1] for service_instance in service_instances]
         instance_name_to_count = Counter(instance_names)
-        duplicate_instance_names = [
+        if duplicate_instance_names := [
             instance_name
             for instance_name, count in instance_name_to_count.items()
             if count > 1
-        ]
-        if duplicate_instance_names:
+        ]:
             check_passed = False
             print(
                 duplicate_instance_names_message(
@@ -438,16 +441,19 @@ def validate_min_max_instances(service_path):
             if instance_config.get_instance_type() != "tron":
                 min_instances = instance_config.get_min_instances()
                 max_instances = instance_config.get_max_instances()
-                if min_instances is not None and max_instances is not None:
-                    if max_instances < min_instances:
-                        returncode = False
-                        print(
-                            failure(
-                                f"Instance {instance} on cluster {cluster} has a greater number of min_instances than max_instances."
-                                + f"The number of min_instances ({min_instances}) cannot be greater than the max_instances ({max_instances}).",
-                                "",
-                            )
+                if (
+                    min_instances is not None
+                    and max_instances is not None
+                    and max_instances < min_instances
+                ):
+                    returncode = False
+                    print(
+                        failure(
+                            f"Instance {instance} on cluster {cluster} has a greater number of min_instances than max_instances."
+                            + f"The number of min_instances ({min_instances}) cannot be greater than the max_instances ({max_instances}).",
+                            "",
                         )
+                    )
 
     return returncode
 

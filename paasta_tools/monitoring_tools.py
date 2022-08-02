@@ -250,7 +250,9 @@ def send_event(
         "team": team,
         "page": get_page(overrides, service, soa_dir),
         "tip": get_tip(overrides, service, soa_dir),
-        "notification_email": get_notification_email(overrides, service, soa_dir),
+        "notification_email": get_notification_email(
+            overrides, service, soa_dir
+        ),
         "check_every": overrides.get("check_every", "1m"),
         "realert_every": overrides.get(
             "realert_every", monitoring_defaults("realert_every")
@@ -263,7 +265,7 @@ def send_event(
         "ticket": get_ticket(overrides, service, soa_dir),
         "project": get_project(overrides, service, soa_dir),
         "priority": get_priority(overrides, service, soa_dir),
-        "source": "paasta-%s" % cluster,
+        "source": f"paasta-{cluster}",
         "tags": get_tags(overrides, service, soa_dir),
         "ttl": ttl,
         "sensu_host": system_paasta_config.get_sensu_host(),
@@ -271,6 +273,7 @@ def send_event(
         "component": get_component(overrides, service, soa_dir),
         "description": get_description(overrides, service, soa_dir),
     }
+
 
     if dry_run:
         if status == pysensu_yelp.Status.OK:
@@ -294,8 +297,7 @@ def read_monitoring_config(service, soa_dir=DEFAULT_SOA_DIR):
     :returns: A dictionary of whatever was in soa_dir/name/monitoring.yaml"""
     rootdir = os.path.abspath(soa_dir)
     monitoring_file = os.path.join(rootdir, service, "monitoring.yaml")
-    monitor_conf = service_configuration_lib.read_monitoring(monitoring_file)
-    return monitor_conf
+    return service_configuration_lib.read_monitoring(monitoring_file)
 
 
 def list_teams():
@@ -303,8 +305,7 @@ def list_teams():
     set).
     """
     team_data = _load_sensu_team_data()
-    teams = set(team_data.get("team_data", {}).keys())
-    return teams
+    return set(team_data.get("team_data", {}).keys())
 
 
 def send_replication_event(
@@ -341,7 +342,7 @@ def send_replication_event(
     )
     monitoring_overrides["description"] = description
 
-    check_name = "check_paasta_services_replication.%s" % instance_config.job_id
+    check_name = f"check_paasta_services_replication.{instance_config.job_id}"
     send_event(
         service=instance_config.service,
         check_name=check_name,
@@ -354,7 +355,7 @@ def send_replication_event(
     )
     _log(
         service=instance_config.service,
-        line="Replication: %s" % output,
+        line=f"Replication: {output}",
         component="monitoring",
         level="debug",
         cluster=instance_config.cluster,
@@ -377,9 +378,11 @@ def emit_replication_metrics(
             "service_discovery_provider": provider,
         }
 
-        num_available_backends = 0
-        for available_backends in replication_info.values():
-            num_available_backends += available_backends.get(instance_config.job_id, 0)
+        num_available_backends = sum(
+            available_backends.get(instance_config.job_id, 0)
+            for available_backends in replication_info.values()
+        )
+
         available_backends_metric = "paasta.service.available_backends"
         if dry_run:
             print(
@@ -404,8 +407,8 @@ def emit_replication_metrics(
             )
             critical_backends_gauge.set(num_critical_backends)
 
-        expected_backends_metric = "paasta.service.expected_backends"
         if dry_run:
+            expected_backends_metric = "paasta.service.expected_backends"
             print(
                 f"Would've sent value {expected_count} for metric '{expected_backends_metric}'"
             )
@@ -457,7 +460,7 @@ def check_replication_for_instance(
             service_is_under_replicated = True
             failed_service_discovery_providers.add(service_discovery_provider)
         else:
-            expected_count_per_location = int(expected_count / len(replication_info))
+            expected_count_per_location = expected_count // len(replication_info)
             output_critical = []
             output_ok = []
             under_replication_per_location = []
@@ -473,27 +476,15 @@ def check_replication_for_instance(
                 )
                 if under_replicated:
                     output_critical.append(
-                        "{} has {}/{} replicas in {} according to {} (CRITICAL: {}%)\n".format(
-                            instance_config.job_id,
-                            num_available_in_location,
-                            expected_count_per_location,
-                            location,
-                            service_discovery_provider,
-                            ratio,
-                        )
+                        f"{instance_config.job_id} has {num_available_in_location}/{expected_count_per_location} replicas in {location} according to {service_discovery_provider} (CRITICAL: {ratio}%)\n"
                     )
+
                     failed_service_discovery_providers.add(service_discovery_provider)
                 else:
                     output_ok.append(
-                        "{} has {}/{} replicas in {} according to {} (OK: {}%)\n".format(
-                            instance_config.job_id,
-                            num_available_in_location,
-                            expected_count_per_location,
-                            location,
-                            service_discovery_provider,
-                            ratio,
-                        )
+                        f"{instance_config.job_id} has {num_available_in_location}/{expected_count_per_location} replicas in {location} according to {service_discovery_provider} (OK: {ratio}%)\n"
                     )
+
                 under_replication_per_location.append(under_replicated)
 
             output = ", ".join(output_critical)
@@ -544,10 +535,8 @@ def check_replication_for_instance(
         )
         status = pysensu_yelp.Status.CRITICAL
     else:
-        description = (
-            "{} is well-replicated because it has over {}% of its "
-            "expected replicas up."
-        ).format(instance_config.job_id, crit_threshold)
+        description = f"{instance_config.job_id} is well-replicated because it has over {crit_threshold}% of its expected replicas up."
+
         status = pysensu_yelp.Status.OK
 
     send_replication_event(
@@ -575,17 +564,11 @@ def check_under_replication(
     # by default, Slack-Sensu messages have a 400 char limit, incl. the output.
     # If it is too long, the runbook and tip won't show up.
     if sub_component is not None:
-        output = ("{} has {}/{} replicas of {} available (threshold: {}%)").format(
-            instance_config.job_id,
-            num_available,
-            expected_count,
-            sub_component,
-            crit_threshold,
-        )
+        output = f"{instance_config.job_id} has {num_available}/{expected_count} replicas of {sub_component} available (threshold: {crit_threshold}%)"
+
     else:
-        output = ("{} has {}/{} replicas available (threshold: {}%)").format(
-            instance_config.job_id, num_available, expected_count, crit_threshold
-        )
+        output = f"{instance_config.job_id} has {num_available}/{expected_count} replicas available (threshold: {crit_threshold}%)"
+
 
     under_replicated, _ = is_under_replicated(
         num_available, expected_count, crit_threshold
@@ -613,10 +596,8 @@ def check_under_replication(
             cluster=instance_config.cluster,
         )
     else:
-        description = (
-            "{} is well-replicated because it has over {}% of its "
-            "expected replicas up."
-        ).format(instance_config.job_id, crit_threshold)
+        description = f"{instance_config.job_id} is well-replicated because it has over {crit_threshold}% of its expected replicas up."
+
     return under_replicated, output, description
 
 

@@ -106,14 +106,20 @@ class QueueAndWorkerMetrics(MetricsThread):
 
         self.max_time_past_deadline_gauge.set(
             max(
-                [now - deadline for deadline in available_deadlines if deadline < now],
+                (
+                    now - deadline
+                    for deadline in available_deadlines
+                    if deadline < now
+                ),
                 default=0,
             )
         )
 
+
         self.sum_time_past_deadline_gauge.set(
-            sum([max(0, now - deadline) for deadline in available_deadlines])
+            sum(max(0, now - deadline) for deadline in available_deadlines)
         )
+
 
         self.workers_busy_gauge.set(
             len([worker for worker in self.workers if worker.busy])

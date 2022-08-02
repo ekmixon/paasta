@@ -42,8 +42,7 @@ def parse_args() -> argparse.Namespace:
         help="The list of service instances to delete",
         metavar=f"SERVICE{SPACER}INSTANCE",
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def get_deployment_names_from_list(service_instance_list):

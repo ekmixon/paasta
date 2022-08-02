@@ -115,7 +115,7 @@ def bounce_lock(name):
     This is a contextmanager. Please use it via 'with bounce_lock(name):'.
 
     :param name: The lock name to acquire"""
-    lockfile = "/var/lock/%s.lock" % name
+    lockfile = f"/var/lock/{name}.lock"
     with open(lockfile, "w") as fd:
         remove = False
         try:
@@ -123,7 +123,7 @@ def bounce_lock(name):
             remove = True
             yield
         except IOError:
-            raise LockHeldException("Service %s is already being bounced!" % name)
+            raise LockHeldException(f"Service {name} is already being bounced!")
         finally:
             if remove:
                 os.remove(lockfile)
@@ -148,7 +148,7 @@ def bounce_lock_zookeeper(
         lock.acquire(timeout=1)  # timeout=0 throws some other strange exception
         yield
     except LockTimeout:
-        raise LockHeldException("Service %s is already being bounced!" % name)
+        raise LockHeldException(f"Service {name} is already being bounced!")
     else:
         lock.release()
     finally:
@@ -248,7 +248,7 @@ def filter_tasks_in_smartstack(
                     )
                 )
             )
-        except (ConnectionError, RequestException):
+        except RequestException:
             log.warning(
                 f"Failed to connect to smartstack on {host}; this may cause us to consider tasks unhealthy."
             )
@@ -296,9 +296,11 @@ def get_happy_tasks(
             # Can't be healthy if it hasn't started
             continue
 
-        if min_task_uptime is not None:
-            if (now - task.started_at).total_seconds() < min_task_uptime:
-                continue
+        if (
+            min_task_uptime is not None
+            and (now - task.started_at).total_seconds() < min_task_uptime
+        ):
+            continue
 
         # if there are healthchecks defined for the app but none have executed yet, then task is unhappy
         # BUT if the task is "old" and Marathon forgot about its healthcheck due to a leader election,

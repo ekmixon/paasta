@@ -126,26 +126,7 @@ def secret_name_for_env(secret_name):
 
 def print_paasta_helper(secret_path, secret_name, is_shared):
     print(
-        "\nYou have successfully encrypted your new secret and it\n"
-        "has been stored at {}\n"
-        "To use the secret in a service you can add it to your PaaSTA service\n"
-        "as an environment variable.\n"
-        "You do so by referencing it in the env dict in your yaml config:\n\n"
-        "main:\n"
-        "  cpus: 1\n"
-        "  env:\n"
-        "    PAASTA_SECRET_{}: {}SECRET({})\n\n"
-        "Once you have referenced the secret you must commit the newly\n"
-        "created/updated json file and your changes to your yaml config. When\n"
-        "you push to master PaaSTA will bounce your service and the new\n"
-        "secrets plaintext will be in the environment variable you have\n"
-        "specified. The PAASTA_SECRET_ prefix is optional but necessary\n"
-        "for the yelp_servlib client library".format(
-            secret_path,
-            secret_name_for_env(secret_name),
-            "SHARED_" if is_shared else "",
-            secret_name,
-        )
+        f'\nYou have successfully encrypted your new secret and it\nhas been stored at {secret_path}\nTo use the secret in a service you can add it to your PaaSTA service\nas an environment variable.\nYou do so by referencing it in the env dict in your yaml config:\n\nmain:\n  cpus: 1\n  env:\n    PAASTA_SECRET_{secret_name_for_env(secret_name)}: {"SHARED_" if is_shared else ""}SECRET({secret_name})\n\nOnce you have referenced the secret you must commit the newly\ncreated/updated json file and your changes to your yaml config. When\nyou push to master PaaSTA will bounce your service and the new\nsecrets plaintext will be in the environment variable you have\nspecified. The PAASTA_SECRET_ prefix is optional but necessary\nfor the yelp_servlib client library'
     )
 
 
@@ -178,11 +159,9 @@ def is_service_folder(soa_dir, service_name):
 def _get_secret_provider_for_service(service_name, cluster_names=None):
     if not is_service_folder(os.getcwd(), service_name):
         print(
-            "{} not found.\n"
-            "You must run this tool from the root of your local yelpsoa checkout\n"
-            "The tool modifies files in yelpsoa-configs that you must then commit\n"
-            "and push back to git.".format(os.path.join(service_name, "service.yaml"))
+            f'{os.path.join(service_name, "service.yaml")} not found.\nYou must run this tool from the root of your local yelpsoa checkout\nThe tool modifies files in yelpsoa-configs that you must then commit\nand push back to git.'
         )
+
         sys.exit(1)
     system_paasta_config = load_system_paasta_config()
     secret_provider_kwargs = {

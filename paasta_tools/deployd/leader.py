@@ -48,15 +48,13 @@ class PaastaLeaderElection(Election):
             self._terminate()
 
     def reconnection_listener(self) -> None:
-        attempts = 0
-        while attempts < 5:
+        for _ in range(5):
             if self.client.state == KazooState.CONNECTED:
                 self.log.warning("Zookeeper connection recovered!")
                 self.waiting_for_reconnect = False
                 return
             self.log.warning("Waiting for zookeeper connection to recover")
             time.sleep(5)
-            attempts += 1
         self.log.error("Connection did not recover, abdicating!")
         self._terminate()
 

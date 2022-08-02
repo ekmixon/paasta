@@ -16,12 +16,9 @@ def parse_args():
 
 def get_deployments():
     clients = get_list_of_marathon_clients()
-    return [
-        deployment
-        for deployment in itertools.chain.from_iterable(
-            c.list_deployments() for c in clients
-        )
-    ]
+    return list(
+        itertools.chain.from_iterable(c.list_deployments() for c in clients)
+    )
 
 
 def main():

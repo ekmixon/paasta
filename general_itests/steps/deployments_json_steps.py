@@ -41,7 +41,7 @@ from paasta_tools.utils import load_deployments_json
 def step_impl_given(context):
     context.test_git_repo_dir = tempfile.mkdtemp("paasta_tools_deployments_json_itest")
     context.test_git_repo = Repo.init(context.test_git_repo_dir)
-    print("Temp repo in %s" % context.test_git_repo_dir)
+    print(f"Temp repo in {context.test_git_repo_dir}")
 
     blob = Blob.from_string(b"My file content\n")
     tree = Tree()
@@ -69,7 +69,7 @@ def generate_system_paasta_config(context):
     system_paasta_config_dir = os.environ["PAASTA_SYSTEM_CONFIG_DIR"]
     if not os.path.exists(system_paasta_config_dir):
         os.makedirs(system_paasta_config_dir)
-    with open("%s/clusters.json" % system_paasta_config_dir, "w+") as f:
+    with open(f"{system_paasta_config_dir}/clusters.json", "w+") as f:
         print(
             json.dumps({"clusters": ["test-cluster"]}, sort_keys=True, indent=4), file=f
         )
@@ -172,17 +172,16 @@ def step_impl_then(context):
             "fake_deployments_json_service:paasta-test-cluster.test_instance": {
                 "force_bounce": context.force_bounce_timestamp,
                 "desired_state": "stop",
-                "docker_image": "services-fake_deployments_json_service:paasta-%s"
-                % context.expected_commit,
+                "docker_image": f"services-fake_deployments_json_service:paasta-{context.expected_commit}",
             },
             "fake_deployments_json_service:paasta-test-cluster.test_instance_2": {
                 "force_bounce": None,
                 "desired_state": "start",
-                "docker_image": "services-fake_deployments_json_service:paasta-%s"
-                % context.expected_commit,
+                "docker_image": f"services-fake_deployments_json_service:paasta-{context.expected_commit}",
             },
         }
     )
+
     assert (
         expected_deployments == deployments
     ), f"actual: {deployments}\nexpected:{expected_deployments}"

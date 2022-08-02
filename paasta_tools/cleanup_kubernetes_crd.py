@@ -62,8 +62,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-n", "--dry-run", action="store_true", dest="dry_run", default=False
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def main() -> None:
@@ -106,10 +105,9 @@ def cleanup_kube_crd(
             log.error(f"CRD {crd.metadata.name} has empty {service_attr} label")
             continue
 
-        crd_config = service_configuration_lib.read_extra_service_information(
+        if crd_config := service_configuration_lib.read_extra_service_information(
             service, f"crd-{cluster}", soa_dir=soa_dir
-        )
-        if crd_config:
+        ):
             log.debug(f"CRD {crd.metadata.name} declaration found in {service}")
             continue
 

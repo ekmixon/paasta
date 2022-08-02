@@ -52,18 +52,21 @@ log = logging.getLogger(__name__)
 
 def filter_healthy_marathon_instances_for_short_app_id(all_tasks, app_id):
     tasks_for_app = [
-        task for task in all_tasks if task.app_id.startswith("/%s" % app_id)
+        task for task in all_tasks if task.app_id.startswith(f"/{app_id}")
     ]
+
     one_minute_ago = datetime.now(timezone.utc) - timedelta(minutes=1)
 
-    healthy_tasks = []
-    for task in tasks_for_app:
+    healthy_tasks = [
+        task
+        for task in tasks_for_app
         if (
             marathon_tools.is_task_healthy(task, default_healthy=True)
             and task.started_at is not None
             and task.started_at < one_minute_ago
-        ):
-            healthy_tasks.append(task)
+        )
+    ]
+
     return len(healthy_tasks)
 
 
@@ -74,7 +77,7 @@ def check_healthy_marathon_tasks_for_service_instance(
     num_healthy_tasks = filter_healthy_marathon_instances_for_short_app_id(
         all_tasks=all_tasks, app_id=app_id
     )
-    log.info("Checking %s in marathon as it is not in smartstack" % app_id)
+    log.info(f"Checking {app_id} in marathon as it is not in smartstack")
     monitoring_tools.send_replication_event_if_under_replication(
         instance_config=instance_config,
         expected_count=expected_count,
@@ -102,24 +105,21 @@ def check_service_replication(
     proxy_port = get_proxy_port_for_instance(instance_config)
 
     registrations = instance_config.get_registrations()
-    # if the primary registration does not match the service_instance name then
-    # the best we can do is check marathon for replication (for now).
     if proxy_port is not None and registrations[0] == instance_config.job_id:
-        is_well_replicated = monitoring_tools.check_replication_for_instance(
+        return monitoring_tools.check_replication_for_instance(
             instance_config=instance_config,
             expected_count=expected_count,
             replication_checker=replication_checker,
             dry_run=dry_run,
         )
-        return is_well_replicated
-    else:
-        check_healthy_marathon_tasks_for_service_instance(
-            instance_config=instance_config,
-            expected_count=expected_count,
-            all_tasks=all_tasks_or_pods,
-            dry_run=dry_run,
-        )
-        return None
+
+    check_healthy_marathon_tasks_for_service_instance(
+        instance_config=instance_config,
+        expected_count=expected_count,
+        all_tasks=all_tasks_or_pods,
+        dry_run=dry_run,
+    )
+    return None
 
 
 if __name__ == "__main__":

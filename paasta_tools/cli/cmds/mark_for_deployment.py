@@ -316,14 +316,17 @@ def deploy_authz_check(deploy_info: Dict[str, Any], service: str) -> None:
         host = system_paasta_config.get_ldap_host()
         ldap_username = system_paasta_config.get_ldap_reader_username()
         ldap_password = system_paasta_config.get_ldap_reader_password()
-        if not any(
-            [
-                deploy_username
-                in ldap_user_search(
-                    group, search_base, search_ou, host, ldap_username, ldap_password
-                )
-                for group in allowed_groups
-            ]
+        if all(
+            deploy_username
+            not in ldap_user_search(
+                group,
+                search_base,
+                search_ou,
+                host,
+                ldap_username,
+                ldap_password,
+            )
+            for group in allowed_groups
         ):
             logline = f"current user is not authorized to perform this action (should be in one of {allowed_groups})"
             _log(service=service, line=logline, component="deploy", level="event")
@@ -372,11 +375,14 @@ def get_authors_to_be_notified(
 def deploy_group_is_set_to_notify(
     deploy_info: Dict[str, Any], deploy_group: str, notify_type: str
 ) -> bool:
-    for step in deploy_info.get("pipeline", []):
-        if step.get("step", "") == deploy_group:
-            # Use the specific notify_type if available else use slack_notify
-            return step.get(notify_type, step.get("slack_notify", False))
-    return False
+    return next(
+        (
+            step.get(notify_type, step.get("slack_notify", False))
+            for step in deploy_info.get("pipeline", [])
+            if step.get("step", "") == deploy_group
+        ),
+        False,
+    )
 
 
 def get_deploy_info(service: str, soa_dir: str) -> Dict[str, Any]:
@@ -393,9 +399,7 @@ def print_rollback_cmd(
         print()
         print(
             PaastaColors.bold(
-                "    paasta rollback --service {} --deploy-group {} --commit {} ".format(
-                    service, deploy_group, old_git_sha
-                )
+                f"    paasta rollback --service {service} --deploy-group {deploy_group} --commit {old_git_sha} "
             )
         )
 
@@ -435,7 +439,7 @@ def paasta_mark_for_deployment(args: argparse.Namespace) -> None:
                 "but this is probably a typo. Did you mean one of these in-use deploy groups?:"
             )
         )
-        print(PaastaColors.red("   %s" % (",").join(in_use_deploy_groups)))
+        print(PaastaColors.red(f'   {(",").join(in_use_deploy_groups)}'))
         print()
         print(PaastaColors.red("Continuing regardless..."))
 
@@ -452,11 +456,13 @@ def paasta_mark_for_deployment(args: argparse.Namespace) -> None:
         print(old_git_sha)
         print("Continuing anyway.")
 
-    if args.verify_image:
-        if not is_docker_image_already_in_registry(service, args.soa_dir, commit):
-            raise ValueError(
-                "Failed to find image in the registry for the following sha %s" % commit
-            )
+    if args.verify_image and not is_docker_image_already_in_registry(
+        service, args.soa_dir, commit
+    ):
+        raise ValueError(
+            f"Failed to find image in the registry for the following sha {commit}"
+        )
+
 
     deploy_info = get_deploy_info(service=service, soa_dir=args.soa_dir)
     deploy_authz_check(deploy_info, service)
@@ -481,8 +487,7 @@ def paasta_mark_for_deployment(args: argparse.Namespace) -> None:
         diagnosis_interval=args.diagnosis_interval,
         time_before_first_diagnosis=args.time_before_first_diagnosis,
     )
-    ret = deploy_process.run()
-    return ret
+    return deploy_process.run()
 
 
 class Progress:
@@ -496,11 +501,11 @@ class Progress:
         self.waiting_on = waiting_on
 
     def human_readable(self, summary: bool) -> str:
-        if self.percent != 0 and self.percent != 100 and not summary:
-            s = f"{round(self.percent)}% (Waiting on {self.human_waiting_on()})"
-        else:
-            s = f"{round(self.percent)}%"
-        return s
+        return (
+            f"{round(self.percent)}% (Waiting on {self.human_waiting_on()})"
+            if self.percent != 0 and self.percent != 100 and not summary
+            else f"{round(self.percent)}%"
+        )
 
     def human_waiting_on(self) -> str:
         if self.waiting_on is None:
@@ -638,22 +643,18 @@ class MarkForDeploymentProcess(SLOSlackDeploymentProcess):
         """ Safely get some slack channel to post to. Defaults to ``DEFAULT_SLACK_CHANNEL``.
         Currently only uses the first slack channel available, and doesn't support
         multi-channel notifications. """
-        if self.deploy_info.get("slack_notify", True):
-            try:
-                channel = self.deploy_info.get("slack_channels")[0]
-                # Nightly jenkins builds will often re-deploy master. This causes Slack noise that wasn't present before
-                # the auto-rollbacks work.
-                if self.commit == self.old_git_sha:
-                    print(
-                        f"Rollback SHA matches rollforward SHA: {self.commit}, "
-                        f"Sending slack notifications to {DEFAULT_SLACK_CHANNEL} instead of {channel}."
-                    )
-                    return DEFAULT_SLACK_CHANNEL
-                else:
-                    return channel
-            except (IndexError, AttributeError, TypeError):
-                return DEFAULT_SLACK_CHANNEL
-        else:
+        if not self.deploy_info.get("slack_notify", True):
+            return DEFAULT_SLACK_CHANNEL
+        try:
+            channel = self.deploy_info.get("slack_channels")[0]
+            if self.commit != self.old_git_sha:
+                return channel
+            print(
+                f"Rollback SHA matches rollforward SHA: {self.commit}, "
+                f"Sending slack notifications to {DEFAULT_SLACK_CHANNEL} instead of {channel}."
+            )
+            return DEFAULT_SLACK_CHANNEL
+        except (IndexError, AttributeError, TypeError):
             return DEFAULT_SLACK_CHANNEL
 
     def get_deployment_name(self) -> str:
@@ -933,10 +934,7 @@ class MarkForDeploymentProcess(SLOSlackDeploymentProcess):
         if self.auto_certify_delay is not None:
             return self.auto_certify_delay
         else:
-            if self.auto_rollbacks_ever_enabled:
-                return DEFAULT_AUTO_CERTIFY_DELAY
-            else:
-                return 0
+            return DEFAULT_AUTO_CERTIFY_DELAY if self.auto_rollbacks_ever_enabled else 0
 
     def already_rolling_back(self) -> bool:
         return self.state in self.rollback_states
@@ -1028,7 +1026,7 @@ class MarkForDeploymentProcess(SLOSlackDeploymentProcess):
 
     def on_enter_deploy_errored(self) -> None:
         report_waiting_aborted(self.service, self.deploy_group)
-        self.update_slack_status(f"Deploy aborted, but it will still try to converge.")
+        self.update_slack_status("Deploy aborted, but it will still try to converge.")
         self.send_manual_rollback_instructions()
         if self.deploy_group_is_set_to_notify("notify_after_abort"):
             self.ping_authors("Deploy errored")
@@ -1084,13 +1082,15 @@ class MarkForDeploymentProcess(SLOSlackDeploymentProcess):
         line = f"Deployment of {self.commit[:8]} for {self.deploy_group} complete"
         _log(service=self.service, component="deploy", line=line, level="event")
         self.send_manual_rollback_instructions()
-        if not (self.any_slo_failing() and self.auto_rollbacks_enabled()):
-            if self.get_auto_certify_delay() > 0:
-                self.start_timer(
-                    self.get_auto_certify_delay(), "auto_certify", "certify"
-                )
-                if self.deploy_group_is_set_to_notify("notify_after_good_deploy"):
-                    self.ping_authors()
+        if (
+            not (self.any_slo_failing() and self.auto_rollbacks_enabled())
+            and self.get_auto_certify_delay() > 0
+        ):
+            self.start_timer(
+                self.get_auto_certify_delay(), "auto_certify", "certify"
+            )
+            if self.deploy_group_is_set_to_notify("notify_after_good_deploy"):
+                self.ping_authors()
 
     def on_enter_complete(self) -> None:
         if self.deploy_group_is_set_to_notify("notify_after_good_deploy"):
@@ -1124,21 +1124,22 @@ class MarkForDeploymentProcess(SLOSlackDeploymentProcess):
         inactive_button_texts = {
             "forward": f"Continue Forward to {self.commit[:8]} :arrow_forward:",
             "complete": f"Complete deploy to {self.commit[:8]} :white_check_mark:",
-            "snooze": f"Reset countdown",
+            "snooze": "Reset countdown",
             "enable_auto_rollbacks": "Enable auto rollbacks :eyes:",
             "disable_auto_rollbacks": "Disable auto rollbacks :close_eyes_monkey:",
         }
 
+
         if self.old_git_sha is not None:
-            active_button_texts.update(
-                {"rollback": f"Rolling Back to {self.old_git_sha[:8]} :zombocom:"}
-            )
-            inactive_button_texts.update(
-                {
-                    "rollback": f"Roll Back to {self.old_git_sha[:8]} :arrow_backward:",
-                    "abandon": f"Abandon deploy, staying on {self.old_git_sha[:8]} :x:",
-                }
-            )
+            active_button_texts[
+                "rollback"
+            ] = f"Rolling Back to {self.old_git_sha[:8]} :zombocom:"
+
+            inactive_button_texts |= {
+                "rollback": f"Roll Back to {self.old_git_sha[:8]} :arrow_backward:",
+                "abandon": f"Abandon deploy, staying on {self.old_git_sha[:8]} :x:",
+            }
+
 
         return (active_button_texts if is_active else inactive_button_texts)[button]
 
@@ -1318,16 +1319,15 @@ def check_if_instance_is_done(
         api = client.get_paasta_oapi_client(cluster=cluster)
         if not api:
             log.warning(
-                "Couldn't reach the PaaSTA api for {}! Assuming it is not "
-                "deployed there yet.".format(cluster)
+                f"Couldn't reach the PaaSTA api for {cluster}! Assuming it is not deployed there yet."
             )
+
             return False
 
     log.debug(
-        "Inspecting the deployment status of {}.{} on {}".format(
-            service, instance, cluster
-        )
+        f"Inspecting the deployment status of {service}.{instance} on {cluster}"
     )
+
     try:
         status = None
         status = api.service.status_instance(
@@ -1342,12 +1342,9 @@ def check_if_instance_is_done(
             # TODO(PAASTA-17290): just print the error message so that we
             # can distinguish between sources of 404s
             log.warning(
-                "Can't get status for instance {}, service {} in "
-                "cluster {}. This is normally because it is a new "
-                "service that hasn't been deployed by PaaSTA yet".format(
-                    instance, service, cluster
-                )
+                f"Can't get status for instance {instance}, service {service} in cluster {cluster}. This is normally because it is a new service that hasn't been deployed by PaaSTA yet"
             )
+
         else:
             log.warning(
                 "Error getting service status from PaaSTA API for "
@@ -1362,43 +1359,37 @@ def check_if_instance_is_done(
             long_running_status = status.kubernetes
     if not status:
         log.debug(
-            "No status for {}.{}, in {}. Not deployed yet.".format(
-                service, instance, cluster
-            )
+            f"No status for {service}.{instance}, in {cluster}. Not deployed yet."
         )
+
         return False
     elif not long_running_status:
         log.debug(
-            "{}.{} in {} is not a Marathon or Kubernetes job. Marked as deployed.".format(
-                service, instance, cluster
-            )
+            f"{service}.{instance} in {cluster} is not a Marathon or Kubernetes job. Marked as deployed."
         )
+
         return True
     elif (
         long_running_status.expected_instance_count == 0
         or long_running_status.desired_state == "stop"
     ):
         log.debug(
-            "{}.{} in {} is marked as stopped. Marked as deployed.".format(
-                service, status.instance, cluster
-            )
+            f"{service}.{status.instance} in {cluster} is marked as stopped. Marked as deployed."
         )
+
         return True
     else:
         if long_running_status.app_count != 1:
             print(
-                "  {}.{} on {} is still bouncing, {} versions "
-                "running".format(
-                    service, status.instance, cluster, long_running_status.app_count,
-                )
+                f"  {service}.{status.instance} on {cluster} is still bouncing, {long_running_status.app_count} versions running"
             )
+
             return False
         if not git_sha.startswith(status.git_sha):
             print(
-                "  {}.{} on {} doesn't have the right sha yet: {}".format(
-                    service, instance, cluster, status.git_sha,
-                )
+                f"  {service}.{instance} on {cluster} doesn't have the right sha yet: {status.git_sha}"
             )
+
             return False
         if long_running_status.deploy_status not in [
             "Running",
@@ -1406,10 +1397,9 @@ def check_if_instance_is_done(
             "Waiting",
         ]:
             print(
-                "  {}.{} on {} isn't running yet: {}".format(
-                    service, instance, cluster, long_running_status.deploy_status,
-                )
+                f"  {service}.{instance} on {cluster} isn't running yet: {long_running_status.deploy_status}"
             )
+
             return False
 
         # The bounce margin factor defines what proportion of instances we need to be "safe",
@@ -1422,16 +1412,9 @@ def check_if_instance_is_done(
         )
         if required_instance_count > long_running_status.running_instance_count:
             print(
-                "  {}.{} on {} isn't scaled up yet, "
-                "has {} out of {} required instances (out of a total of {})".format(
-                    service,
-                    instance,
-                    cluster,
-                    long_running_status.running_instance_count,
-                    required_instance_count,
-                    long_running_status.expected_instance_count,
-                )
+                f"  {service}.{instance} on {cluster} isn't scaled up yet, has {long_running_status.running_instance_count} out of {required_instance_count} required instances (out of a total of {long_running_status.expected_instance_count})"
             )
+
             return False
 
         # `is not None` is necessary here because I'm adding the new attribute to the API response at the same time as I'm adding this reference.
@@ -1450,15 +1433,9 @@ def check_if_instance_is_done(
                 return False
 
         print(
-            "Complete: {}.{} on {} looks 100% deployed at {} "
-            "instances on {}".format(
-                service,
-                instance,
-                cluster,
-                long_running_status.running_instance_count,
-                status.git_sha,
-            )
+            f"Complete: {service}.{instance} on {cluster} looks 100% deployed at {long_running_status.running_instance_count} instances on {status.git_sha}"
         )
+
         return True
 
 
@@ -1494,9 +1471,10 @@ def get_instance_configs_for_service_in_deploy_group_all_clusters(
         if cluster not in api_endpoints:
             print(
                 PaastaColors.red(
-                    "Cluster %s is NOT in paasta-api endpoints config." % cluster
+                    f"Cluster {cluster} is NOT in paasta-api endpoints config."
                 )
             )
+
             raise NoSuchCluster
 
         instance_configs_per_cluster[cluster] = list(

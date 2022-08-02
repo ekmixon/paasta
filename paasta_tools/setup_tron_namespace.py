@@ -59,8 +59,7 @@ def parse_args():
         help="Cluster to read configs for. Defaults to the configuration in /etc/paasta",
         default=None,
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def main():
@@ -104,13 +103,12 @@ def main():
         log.info(f"Would update {MASTER_NAMESPACE} to:")
         log.info(f"{master_config}")
         updated.append(MASTER_NAMESPACE)
+    elif client.update_namespace(MASTER_NAMESPACE, master_config):
+        updated.append(MASTER_NAMESPACE)
+        log.debug(f"Updated {MASTER_NAMESPACE}")
     else:
-        if client.update_namespace(MASTER_NAMESPACE, master_config):
-            updated.append(MASTER_NAMESPACE)
-            log.debug(f"Updated {MASTER_NAMESPACE}")
-        else:
-            skipped.append(MASTER_NAMESPACE)
-            log.debug(f"Skipped {MASTER_NAMESPACE}")
+        skipped.append(MASTER_NAMESPACE)
+        log.debug(f"Skipped {MASTER_NAMESPACE}")
 
     k8s_enabled_for_cluster = (
         yaml.safe_load(master_config).get("k8s_options", {}).get("enabled", False)
@@ -127,13 +125,12 @@ def main():
                 log.info(f"Would update {service} to:")
                 log.info(f"{new_config}")
                 updated.append(service)
+            elif client.update_namespace(service, new_config):
+                updated.append(service)
+                log.debug(f"Updated {service}")
             else:
-                if client.update_namespace(service, new_config):
-                    updated.append(service)
-                    log.debug(f"Updated {service}")
-                else:
-                    skipped.append(service)
-                    log.debug(f"Skipped {service}")
+                skipped.append(service)
+                log.debug(f"Skipped {service}")
         except Exception as e:
             log.error(f"Update for {service} failed: {str(e)}")
             log.debug(f"Exception while updating {service}", exc_info=1)

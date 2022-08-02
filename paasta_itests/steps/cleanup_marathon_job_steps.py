@@ -43,7 +43,7 @@ def delete_apps(context, job_id, cluster_name):
 )
 def run_cleanup_marathon_job(context, flags, expected_return_code):
     cmd = f"python -m paasta_tools.cleanup_marathon_jobs --soa-dir {context.soa_dir} {flags}"
-    print("Running cmd %s" % (cmd))
+    print(f"Running cmd {cmd}")
     exit_code, output = _run(cmd)
     print(output)
 

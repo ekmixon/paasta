@@ -95,7 +95,7 @@ class FakeHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
     status_code = 200
 
     def do_GET(self):
-        print("Got GET for %s" % self.path)
+        print(f"Got GET for {self.path}")
         try:
             FakeHTTPServer.paths.append(self.path)
             self.send_response(self.status_code)

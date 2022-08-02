@@ -121,12 +121,11 @@ def parse_args():
 def get_default_git_remote():
     system_paasta_config = load_system_paasta_config()
     repo_config = system_paasta_config.get_git_repo_config("yelpsoa-configs")
-    default_git_remote = format_git_url(
+    return format_git_url(
         system_paasta_config.get_git_config()["git_user"],
         repo_config.get("git_server", DEFAULT_SOA_CONFIGS_GIT_URL),
         repo_config["repo_name"],
     )
-    return default_git_remote
 
 
 def get_recommendation_from_result(result, keys_to_apply):
@@ -165,10 +164,8 @@ def get_recommendations_by_service_file(results, keys_to_apply):
             result["service"],
             result["cluster"],
         )  # e.g. (foo, marathon-norcal-stagef)
-        rec = get_recommendation_from_result(result, keys_to_apply)
-        if not rec:
-            continue
-        results_by_service_file[key][result["instance"]] = rec
+        if rec := get_recommendation_from_result(result, keys_to_apply):
+            results_by_service_file[key][result["instance"]] = rec
     return results_by_service_file
 
 

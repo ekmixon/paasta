@@ -116,8 +116,9 @@ def parse_args() -> argparse.Namespace:
         "service_instance_list",
         nargs="+",
         help="The list of marathon service instances to create or update",
-        metavar="SERVICE%sINSTANCE" % SPACER,
+        metavar=f"SERVICE{SPACER}INSTANCE",
     )
+
     parser.add_argument(
         "-d",
         "--soa-dir",
@@ -129,8 +130,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-v", "--verbose", action="store_true", dest="verbose", default=False
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def send_event(
@@ -167,7 +167,7 @@ def send_event(
     # that will probably be fixed eventually, so we set an alert_after
     # to suppress extra noise
     monitoring_overrides["alert_after"] = "10m"
-    check_name = "setup_marathon_job.%s" % compose_job_id(name, instance)
+    check_name = f"setup_marathon_job.{compose_job_id(name, instance)}"
     monitoring_tools.send_event(
         name,
         check_name,
@@ -397,11 +397,11 @@ def do_bounce(
                 try:
                     reserve_all_resources([hostname])
                 except HTTPError:
-                    log.warning("Failed to reserve resources on %s" % hostname)
+                    log.warning(f"Failed to reserve resources on {hostname}")
 
     apps_to_kill: List[Tuple[str, MarathonClient]] = []
     for app, client in old_app_live_happy_tasks.keys():
-        if app != "/%s" % marathon_jobid or client != new_client:
+        if app != f"/{marathon_jobid}" or client != new_client:
             live_happy_tasks = old_app_live_happy_tasks[(app, client)]
             live_unhappy_tasks = old_app_live_unhappy_tasks[(app, client)]
             draining_tasks = old_app_draining_tasks[(app, client)]
@@ -413,14 +413,14 @@ def do_bounce(
             for task, _ in tasks_to_kill:
                 remaining_tasks.discard(task)
 
-            if 0 == len(remaining_tasks):
+            if len(remaining_tasks) == 0:
                 apps_to_kill.append((app, client))
 
     if apps_to_kill:
         log_bounce_action(
-            line="%s bounce removing old unused apps with app_ids: %s"
-            % (bounce_method, ", ".join([app for app, client in apps_to_kill]))
+            line=f'{bounce_method} bounce removing old unused apps with app_ids: {", ".join([app for app, client in apps_to_kill])}'
         )
+
         with requests_cache.disabled():
             for app_id, client in apps_to_kill:
                 bounce_lib.kill_old_ids([app_id], client)
@@ -434,31 +434,30 @@ def do_bounce(
     if all_old_tasks or (not new_app_running):
         # Still have work more work to do, try again in 60 seconds
         return 60
-    else:
         # log if we appear to be finished
-        if all(
+    if all(
             [
                 (apps_to_kill or tasks_to_kill),
                 apps_to_kill == list(old_app_live_happy_tasks),
                 tasks_to_kill == all_old_tasks,
             ]
         ):
-            log_bounce_action(
-                line="%s bounce on %s finishing. Now running %s"
-                % (bounce_method, serviceinstance, marathon_jobid),
-                level="event",
-            )
+        log_bounce_action(
+            line=f"{bounce_method} bounce on {serviceinstance} finishing. Now running {marathon_jobid}",
+            level="event",
+        )
 
-            if yelp_meteorite:
-                yelp_meteorite.events.emit_event(
-                    "deploy.paasta",
-                    dimensions={
-                        "paasta_cluster": cluster,
-                        "paasta_instance": instance,
-                        "paasta_service": service,
-                    },
-                )
-        return None
+
+        if yelp_meteorite:
+            yelp_meteorite.events.emit_event(
+                "deploy.paasta",
+                dimensions={
+                    "paasta_cluster": cluster,
+                    "paasta_instance": instance,
+                    "paasta_service": service,
+                },
+            )
+    return None
 
 
 TasksByStateDict = Dict[str, Set[MarathonTask]]
@@ -498,10 +497,7 @@ def get_tasks_by_state_for_app(
             if is_draining is True:
                 state = "draining"
             elif task in happy_tasks:
-                if task.host in draining_hosts:
-                    state = "at_risk"
-                else:
-                    state = "happy"
+                state = "at_risk" if task.host in draining_hosts else "happy"
             else:
                 state = "unhappy"
         tasks_by_state[state].add(task)
@@ -654,7 +650,7 @@ def deploy_service(
     other_apps_with_clients: List[Tuple[MarathonApp, MarathonClient]] = []
 
     for a, c in existing_apps_with_clients:
-        if a.id == "/%s" % config["id"] and c == new_client:
+        if a.id == f'/{config["id"]}' and c == new_client:
             new_apps_with_clients_list.append((a, c))
         else:
             other_apps_with_clients.append((a, c))
@@ -694,10 +690,8 @@ def deploy_service(
     try:
         draining_hosts = get_draining_hosts(system_paasta_config=system_paasta_config)
     except ReadTimeout as e:
-        errormsg = (
-            "ReadTimeout encountered trying to get draining hosts: %s. Continuing with bounce assuming no tasks at-risk"
-            % e
-        )
+        errormsg = f"ReadTimeout encountered trying to get draining hosts: {e}. Continuing with bounce assuming no tasks at-risk"
+
         log_deploy_error(errormsg)
         draining_hosts = []
 
@@ -812,10 +806,8 @@ def deploy_service(
         try:
             bounce_func = bounce_lib.get_bounce_method_func(bounce_method)
         except KeyError:
-            errormsg = (
-                "ERROR: bounce_method not recognized: %s. Must be one of (%s)"
-                % (bounce_method, ", ".join(bounce_lib.list_bounce_methods()))
-            )
+            errormsg = f'ERROR: bounce_method not recognized: {bounce_method}. Must be one of ({", ".join(bounce_lib.list_bounce_methods())})'
+
             log_deploy_error(errormsg)
             return (1, errormsg, None)
 
@@ -1003,8 +995,8 @@ def deploy_marathon_service(
     short_id = marathon_tools.format_job_id(service, instance)
     try:
         with bounce_lib.bounce_lock_zookeeper(
-            short_id, system_paasta_config=system_paasta_config
-        ):
+                    short_id, system_paasta_config=system_paasta_config
+                ):
             try:
                 service_instance_config = marathon_tools.load_marathon_service_config_no_cache(
                     service,
@@ -1014,15 +1006,13 @@ def deploy_marathon_service(
                 )
             except NoDeploymentsAvailable:
                 log.debug(
-                    "No deployments found for %s.%s in cluster %s. Skipping."
-                    % (service, instance, system_paasta_config.get_cluster())
+                    f"No deployments found for {service}.{instance} in cluster {system_paasta_config.get_cluster()}. Skipping."
                 )
+
                 return 0, None
             except NoConfigurationForServiceError:
-                error_msg = (
-                    "Could not read marathon configuration file for %s.%s in cluster %s"
-                    % (service, instance, system_paasta_config.get_cluster())
-                )
+                error_msg = f"Could not read marathon configuration file for {service}.{instance} in cluster {system_paasta_config.get_cluster()}"
+
                 log.error(error_msg)
                 return 1, None
 

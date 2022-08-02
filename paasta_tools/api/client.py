@@ -115,8 +115,7 @@ def get_paasta_oapi_client(
     parsed = urlparse(api_endpoints[cluster])
     cert_file = key_file = ssl_ca_cert = None
     if parsed.scheme == "https":
-        opts = get_paasta_ssl_opts(cluster, system_paasta_config)
-        if opts:
+        if opts := get_paasta_ssl_opts(cluster, system_paasta_config):
             cert_file = opts["cert"]
             key_file = opts["key"]
             ssl_ca_cert = opts["ca"]

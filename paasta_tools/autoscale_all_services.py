@@ -38,8 +38,7 @@ def parse_args():
         nargs="*",
         help="name of services to scale (optional defaults to all autoscaling enabled services)",
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def main():

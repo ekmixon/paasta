@@ -90,7 +90,7 @@ def start_paasta_native_framework(
     elif scheduler == "adhoc":
         scheduler_class = AdhocScheduler
     else:
-        raise Exception("unknown scheduler: %s" % scheduler)
+        raise Exception(f"unknown scheduler: {scheduler}")
 
     context.framework_name = framework_name
     context.scheduler = scheduler_class(
@@ -154,12 +154,7 @@ def fresh_soa_dir(context):
 def write_paasta_native_cluster_yaml_files(context, service, instance):
     if not os.path.exists(os.path.join(context.soa_dir, service)):
         os.makedirs(os.path.join(context.soa_dir, service))
-    with open(
-        os.path.join(
-            context.soa_dir, service, "paasta_native-%s.yaml" % context.cluster
-        ),
-        "w",
-    ) as f:
+    with open(os.path.join(context.soa_dir, service, f"paasta_native-{context.cluster}.yaml"), "w") as f:
         f.write(
             yaml.safe_dump(
                 {
@@ -235,7 +230,7 @@ def should_not_be_framework_with_name(context, name):
 @when("we terminate that framework")
 def terminate_that_framework(context):
     try:
-        print("terminating framework %s" % context.scheduler.framework_id)
+        print(f"terminating framework {context.scheduler.framework_id}")
         mesos_tools.terminate_framework(context.scheduler.framework_id)
     except HTTPError as e:
         raise Exception(e.response.text)
@@ -284,11 +279,10 @@ def it_should_drain_num_tasks(context, num):
             context.drained_tasks = set(drain_lib.TestDrainMethod.downed_task_ids)
             return
         time.sleep(1)
-    else:
-        raise Exception(
-            "Expected %d tasks to drain before timeout, saw %d"
-            % (num, len(drain_lib.TestDrainMethod.downed_task_ids))
-        )
+    raise Exception(
+        "Expected %d tasks to drain before timeout, saw %d"
+        % (num, len(drain_lib.TestDrainMethod.downed_task_ids))
+    )
 
 
 @then(
@@ -310,11 +304,10 @@ def it_should_undrain_and_drain(context, num_undrain_expected, num_drain_expecte
         if num_drained >= num_drain_expected and num_undrained >= num_undrain_expected:
             return
         time.sleep(1)
-    else:
-        raise Exception(
-            "Expected %d tasks to drain and %d to undrain, saw %d and %d"
-            % (num_drain_expected, num_undrain_expected, num_drained, num_undrained)
-        )
+    raise Exception(
+        "Expected %d tasks to drain and %d to undrain, saw %d and %d"
+        % (num_drain_expected, num_undrain_expected, num_drained, num_undrained)
+    )
 
 
 @then("it should eventually have only {num} tasks")
@@ -365,8 +358,7 @@ def periodic_should_eventually_be_called(context):
         for scheduler in context.main_schedulers:
             if hasattr(scheduler, "periodic_was_called"):
                 return
-    else:
-        raise Exception("periodic() not called on all schedulers")
+    raise Exception("periodic() not called on all schedulers")
 
 
 @then(

@@ -183,9 +183,9 @@ class HacheckDrainMethod(DrainMethod):
         **kwargs: Dict,
     ) -> None:
         super().__init__(service, instance, registrations)
-        self.delay = float(delay)
+        self.delay = delay
         self.hacheck_port = hacheck_port
-        self.expiration = float(expiration) or float(delay) * 10
+        self.expiration = expiration or delay * 10
 
     def spool_urls(self, task: DrainTask) -> List[str]:
         return [
@@ -229,16 +229,14 @@ class HacheckDrainMethod(DrainMethod):
 
     async def is_draining(self, task: DrainTask) -> bool:
         results = await self.for_each_registration(task, get_spool)
-        return not all([res is None or res["state"] == "up" for res in results])
+        return not all(res is None or res["state"] == "up" for res in results)
 
     async def is_safe_to_kill(self, task: DrainTask) -> bool:
         results = await self.for_each_registration(task, lambda url: get_spool(url))
-        if all([res is None or res["state"] == "up" for res in results]):
+        if all(res is None or res["state"] == "up" for res in results):
             return False
         else:
-            return all(
-                [res.get("since", 0) < (time.time() - self.delay) for res in results]
-            )
+            return all(res.get("since", 0) < (time.time() - self.delay) for res in results)
 
 
 class StatusCodeNotAcceptableError(Exception):
@@ -289,7 +287,7 @@ class HTTPDrainMethod(DrainMethod):
     def parse_success_codes(self, success_codes_str: str) -> Set[int]:
         """Expand a string like 200-399,407-409,500 to a set containing all the integers in between."""
         acceptable_response_codes: Set[int] = set()
-        for series_str in str(success_codes_str).split(","):
+        for series_str in success_codes_str.split(","):
             if "-" in series_str:
                 start, end = series_str.split("-")
                 acceptable_response_codes.update(range(int(start), int(end) + 1))

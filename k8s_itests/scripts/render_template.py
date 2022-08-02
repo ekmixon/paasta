@@ -78,8 +78,7 @@ def parse_args():
         default=None,
         help="values need to be valid file if provided",
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def main():

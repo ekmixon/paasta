@@ -21,7 +21,7 @@ def main():
     copy_tree("/etc/paasta", os.path.join(os.getcwd(), config_path))
     # Generate tron.json
     tron_config = {"tron": {"url": f"http://tron-{cluster}:8089"}}
-    with open(config_path + "/tron.json", "w") as f:
+    with open(f"{config_path}/tron.json", "w") as f:
         json.dump(tron_config, f)
     # find unused port
     port = pick_random_port("paasta-dev-api")

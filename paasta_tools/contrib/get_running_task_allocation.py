@@ -115,11 +115,12 @@ async def get_mesos_task_allocation_info() -> Iterable[TaskAllocationInfo]:
 def get_all_running_kubernetes_pods(
     kube_client: KubeClient, namespace: str
 ) -> Iterable[V1Pod]:
-    running = []
-    for pod in kubernetes_tools.get_all_pods(kube_client, namespace):
-        if kubernetes_tools.get_pod_status(pod) == kubernetes_tools.PodStatus.RUNNING:
-            running.append(pod)
-    return running
+    return [
+        pod
+        for pod in kubernetes_tools.get_all_pods(kube_client, namespace)
+        if kubernetes_tools.get_pod_status(pod)
+        == kubernetes_tools.PodStatus.RUNNING
+    ]
 
 
 def get_kubernetes_resource_request_limit(
@@ -144,11 +145,11 @@ def get_kubernetes_resource_request_limit(
 
 def get_pod_pool(kube_client: KubeClient, pod: V1Pod,) -> str:
     node = kubernetes_tools.get_pod_node(kube_client, pod, cache_nodes=True)
-    pool = "default"
-    if node:
-        if node.metadata.labels:
-            pool = node.metadata.labels.get("yelp.com/pool", "default")
-    return pool
+    return (
+        node.metadata.labels.get("yelp.com/pool", "default")
+        if node and node.metadata.labels
+        else "default"
+    )
 
 
 def get_kubernetes_metadata(
@@ -201,10 +202,11 @@ def get_kubernetes_task_allocation_info(namespace: str) -> Iterable[TaskAllocati
             config_sha,
         ) = get_kubernetes_metadata(pod)
         pool = get_pod_pool(client, pod)
-        name_to_info: MutableMapping[str, Any] = {}
-        for container in pod.spec.containers:
-            name_to_info[container.name] = {
-                "resources": get_kubernetes_resource_request_limit(container.resources),
+        name_to_info: MutableMapping[str, Any] = {
+            container.name: {
+                "resources": get_kubernetes_resource_request_limit(
+                    container.resources
+                ),
                 "container_type": get_container_type(container.name, instance),
                 "pod_name": pod_name,
                 "pod_ip": pod_ip,
@@ -212,6 +214,9 @@ def get_kubernetes_task_allocation_info(namespace: str) -> Iterable[TaskAllocati
                 "git_sha": git_sha,
                 "config_sha": config_sha,
             }
+            for container in pod.spec.containers
+        }
+
         container_statuses = pod.status.container_statuses or []
         for container in container_statuses:
             if not container.state.running:
@@ -227,24 +232,24 @@ def get_kubernetes_task_allocation_info(namespace: str) -> Iterable[TaskAllocati
                 "start_time": container.state.running.started_at.timestamp(),
             }
             name_to_info[container.name].update(update)
-        for info in name_to_info.values():
-            info_list.append(
-                TaskAllocationInfo(
-                    paasta_service=service,
-                    paasta_instance=instance,
-                    container_type=info.get("container_type"),
-                    paasta_pool=pool,
-                    resources=info.get("resources"),
-                    start_time=info.get("start_time"),
-                    docker_id=info.get("docker_id"),
-                    pod_name=info.get("pod_name"),
-                    pod_ip=info.get("pod_ip"),
-                    host_ip=info.get("host_ip"),
-                    git_sha=info.get("git_sha"),
-                    config_sha=info.get("config_sha"),
-                    mesos_container_id=None,
-                )
+        info_list.extend(
+            TaskAllocationInfo(
+                paasta_service=service,
+                paasta_instance=instance,
+                container_type=info.get("container_type"),
+                paasta_pool=pool,
+                resources=info.get("resources"),
+                start_time=info.get("start_time"),
+                docker_id=info.get("docker_id"),
+                pod_name=info.get("pod_name"),
+                pod_ip=info.get("pod_ip"),
+                host_ip=info.get("host_ip"),
+                git_sha=info.get("git_sha"),
+                config_sha=info.get("config_sha"),
+                mesos_container_id=None,
             )
+            for info in name_to_info.values()
+        )
 
     return info_list
 
@@ -252,10 +257,10 @@ def get_kubernetes_task_allocation_info(namespace: str) -> Iterable[TaskAllocati
 def get_task_allocation_info(
     scheduler: str, namespace: str
 ) -> Iterable[TaskAllocationInfo]:
-    if scheduler == "mesos":
-        return get_mesos_task_allocation_info()
-    elif scheduler == "kubernetes":
+    if scheduler == "kubernetes":
         return get_kubernetes_task_allocation_info(namespace)
+    elif scheduler == "mesos":
+        return get_mesos_task_allocation_info()
     else:
         return []
 

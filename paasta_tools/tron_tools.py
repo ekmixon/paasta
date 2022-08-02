@@ -141,7 +141,7 @@ def decompose_instance(instance):
     """Get (job_name, action_name) from an instance."""
     decomposed = instance.split(SPACER)
     if len(decomposed) != 2:
-        raise InvalidInstanceConfig("Invalid instance name: %s" % instance)
+        raise InvalidInstanceConfig(f"Invalid instance name: {instance}")
     return (decomposed[0], decomposed[1])
 
 
@@ -194,8 +194,7 @@ def pick_spark_ui_port(service, instance):
     # will be scheduled on, so we just try to make them unique per service / instance.
     hash_key = f"{service} {instance}".encode()
     hash_number = int(hashlib.sha1(hash_key).hexdigest(), 16)
-    preferred_port = 33000 + (hash_number % 25000)
-    return preferred_port
+    return 33000 + (hash_number % 25000)
 
 
 class TronActionConfig(InstanceConfig):
@@ -232,10 +231,11 @@ class TronActionConfig(InstanceConfig):
 
         if self.get_spark_cluster_manager() == "mesos":
             mesos_leader = (
-                f"zk://{load_system_paasta_config().get_zk_hosts()}"
-                if not self.for_validation
-                else "N/A"
+                "N/A"
+                if self.for_validation
+                else f"zk://{load_system_paasta_config().get_zk_hosts()}"
             )
+
         else:
             mesos_leader = None
 
@@ -280,9 +280,9 @@ class TronActionConfig(InstanceConfig):
         # This logic ensures that we can still pass validation and run setup_tron_namespace even if
         # there's nothing in deployments.json yet.
         return (
-            ""
-            if not self.get_docker_image()
-            else super().get_docker_url(system_paasta_config=system_paasta_config)
+            super().get_docker_url(system_paasta_config=system_paasta_config)
+            if self.get_docker_image()
+            else ""
         )
 
     def get_cmd(self):
@@ -292,9 +292,8 @@ class TronActionConfig(InstanceConfig):
             # but the default value (/mnt/mesos/sandbox) doesn't get mounted in
             # our Docker containers, so we unset it here.  (Un-setting is fine,
             # since Spark will just write to /tmp instead).
-            command = "unset MESOS_DIRECTORY MESOS_SANDBOX; " + inject_spark_conf_str(
-                command, stringify_spark_env(self.get_spark_config_dict())
-            )
+            command = f"unset MESOS_DIRECTORY MESOS_SANDBOX; {inject_spark_conf_str(command, stringify_spark_env(self.get_spark_config_dict()))}"
+
         return command
 
     def get_spark_paasta_cluster(self):
@@ -357,9 +356,7 @@ class TronActionConfig(InstanceConfig):
             if is_secret_ref(v):
                 secret = get_secret_name_from_ref(v)
                 sanitised_secret = sanitise_kubernetes_name(secret)
-                service = (
-                    self.service if not is_shared_secret(v) else SHARED_SECRET_SERVICE
-                )
+                service = SHARED_SECRET_SERVICE if is_shared_secret(v) else self.service
                 sanitised_service = sanitise_kubernetes_name(service)
                 secret_env[k] = {
                     "secret_name": f"tron-secret-{sanitised_service}-{sanitised_secret}",
@@ -429,9 +426,7 @@ class TronActionConfig(InstanceConfig):
     def get_calculated_constraints(self):
         """Combine all configured Mesos constraints."""
         constraints = self.get_constraints()
-        if constraints is not None:
-            return constraints
-        else:
+        if constraints is None:
             constraints = self.get_extra_constraints()
             constraints.extend(
                 self.get_deploy_constraints(
@@ -443,7 +438,7 @@ class TronActionConfig(InstanceConfig):
                 )
             )
             constraints.extend(self.get_pool_constraints())
-            return constraints
+        return constraints
 
     def get_nerve_namespace(self) -> None:
         return None
@@ -517,7 +512,7 @@ class TronJobConfig:
             monitoring_tools.read_monitoring_config(self.service, soa_dir=self.soa_dir)
         )
         tron_monitoring = self.config_dict.get("monitoring", {})
-        srv_monitoring.update(tron_monitoring)
+        srv_monitoring |= tron_monitoring
         # filter out non-tron monitoring keys
         srv_monitoring = {
             k: v for k, v in srv_monitoring.items() if k in VALID_MONITORING_KEYS
@@ -607,11 +602,7 @@ class TronJobConfig:
 
     def get_cleanup_action(self):
         action_dict = self.config_dict.get("cleanup_action")
-        if not action_dict:
-            return None
-
-        # TODO: we should keep this trickery outside paasta repo
-        return self._get_action_config("cleanup", action_dict)
+        return self._get_action_config("cleanup", action_dict) if action_dict else None
 
     def check_monitoring(self) -> Tuple[bool, str]:
         monitoring = self.get_monitoring()
@@ -632,15 +623,13 @@ class TronJobConfig:
 
     def check_actions(self) -> Tuple[bool, List[str]]:
         actions = self.get_actions()
-        cleanup_action = self.get_cleanup_action()
-        if cleanup_action:
+        if cleanup_action := self.get_cleanup_action():
             actions.append(cleanup_action)
 
         checks_passed = True
         msgs: List[str] = []
         for action in actions:
-            action_msgs = action.validate()
-            if action_msgs:
+            if action_msgs := action.validate():
                 checks_passed = False
                 msgs.extend(action_msgs)
         return checks_passed, msgs
@@ -681,8 +670,7 @@ def format_master_config(master_config, default_volumes, dockercfg_location):
     )
     master_config["mesos_options"] = mesos_options
 
-    k8s_options = master_config.get("k8s_options", {})
-    if k8s_options:
+    if k8s_options := master_config.get("k8s_options", {}):
         # Only add default volumes if we already have k8s_options
         k8s_options.update(
             {"default_volumes": format_volumes(default_volumes),}
@@ -793,8 +781,7 @@ def format_tron_job_dict(job_config: TronJobConfig, k8s_enabled: bool = False):
     if job_config.get_use_k8s():
         result["use_k8s"] = job_config.get_use_k8s()
 
-    cleanup_config = job_config.get_cleanup_action()
-    if cleanup_config:
+    if cleanup_config := job_config.get_cleanup_action():
         cleanup_action = format_tron_action_dict(
             action_config=cleanup_config, use_k8s=use_k8s
         )
@@ -853,7 +840,7 @@ def load_tron_service_config_no_cache(
         service_name=service, extra_info=f"tron-{cluster}", soa_dir=soa_dir
     )
     jobs = filter_templates_from_config(config)
-    job_configs = [
+    return [
         TronJobConfig(
             name=name,
             service=service,
@@ -865,13 +852,12 @@ def load_tron_service_config_no_cache(
         )
         for name, job in jobs.items()
     ]
-    return job_configs
 
 
 def create_complete_master_config(cluster, soa_dir=DEFAULT_SOA_DIR):
     system_paasta_config = load_system_paasta_config()
     tronfig_folder = get_tronfig_folder(soa_dir=soa_dir, cluster=cluster)
-    config = read_yaml_file(os.path.join(tronfig_folder, f"MASTER.yaml"))
+    config = read_yaml_file(os.path.join(tronfig_folder, "MASTER.yaml"))
     master_config = format_master_config(
         config,
         system_paasta_config.get_volumes(),
@@ -890,13 +876,15 @@ def create_complete_config(
     job_configs = load_tron_service_config(
         service=service, cluster=cluster, load_deployments=True, soa_dir=soa_dir,
     )
-    preproccessed_config = {}
-    preproccessed_config["jobs"] = {
-        job_config.get_name(): format_tron_job_dict(
-            job_config=job_config, k8s_enabled=k8s_enabled
-        )
-        for job_config in job_configs
+    preproccessed_config = {
+        "jobs": {
+            job_config.get_name(): format_tron_job_dict(
+                job_config=job_config, k8s_enabled=k8s_enabled
+            )
+            for job_config in job_configs
+        }
     }
+
     return yaml.dump(preproccessed_config, Dumper=Dumper, default_flow_style=False)
 
 
@@ -913,13 +901,13 @@ def validate_complete_config(
 
     # PaaSTA-specific validation
     for job_config in job_configs:
-        check_msgs = job_config.validate()
-        if check_msgs:
+        if check_msgs := job_config.validate():
             return check_msgs
 
     master_config_path = os.path.join(
-        os.path.abspath(soa_dir), "tron", cluster, MASTER_NAMESPACE + ".yaml"
+        os.path.abspath(soa_dir), "tron", cluster, f"{MASTER_NAMESPACE}.yaml"
     )
+
 
     # TODO: remove creating the master config here once we're fully off of mesos
     # since we only have it here to verify that the generated tronfig will be valid
@@ -931,13 +919,13 @@ def validate_complete_config(
     )
     k8s_enabled_for_cluster = master_config.get("k8s_options", {}).get("enabled", False)
 
-    preproccessed_config = {}
-    # Use Tronfig on generated config from PaaSTA to validate the rest
-    preproccessed_config["jobs"] = {
-        job_config.get_name(): format_tron_job_dict(
-            job_config=job_config, k8s_enabled=k8s_enabled_for_cluster
-        )
-        for job_config in job_configs
+    preproccessed_config = {
+        "jobs": {
+            job_config.get_name(): format_tron_job_dict(
+                job_config=job_config, k8s_enabled=k8s_enabled_for_cluster
+            )
+            for job_config in job_configs
+        }
     }
 
     complete_config = yaml.dump(preproccessed_config, Dumper=Dumper)
@@ -951,8 +939,7 @@ def validate_complete_config(
     )
 
     if proc.returncode != 0:
-        process_errors = proc.stderr.strip()
-        if process_errors:  # Error running tronfig
+        if process_errors := proc.stderr.strip():
             print(proc.stderr)
         return [proc.stdout.strip()]
 
@@ -966,8 +953,7 @@ def get_tron_namespaces(cluster, soa_dir):
         for _dir in os.walk(os.path.abspath(soa_dir))
         if tron_config_file in _dir[2]
     ]
-    namespaces = [os.path.split(config_dir)[1] for config_dir in config_dirs]
-    return namespaces
+    return [os.path.split(config_dir)[1] for config_dir in config_dirs]
 
 
 def list_tron_clusters(service: str, soa_dir: str = DEFAULT_SOA_DIR) -> List[str]:
@@ -978,7 +964,7 @@ def list_tron_clusters(service: str, soa_dir: str = DEFAULT_SOA_DIR) -> List[str
     for filename in glob.glob(f"{service_dir}/*.yaml"):
         cluster_re_match = re.search(search_re, filename)
         if cluster_re_match is not None:
-            clusters.append(cluster_re_match.group(1))
+            clusters.append(cluster_re_match[1])
     return clusters
 
 

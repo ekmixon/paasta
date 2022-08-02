@@ -112,17 +112,14 @@ class Application(ABC):
                 # Deployment does not exist, nothing to delete but
                 # we can consider this a success.
                 self.logging.debug(
-                    "not deleting nonexistent pod disruption budget/{} from namespace/{}".format(
-                        self.item.metadata.name, self.item.metadata.namespace
-                    )
+                    f"not deleting nonexistent pod disruption budget/{self.item.metadata.name} from namespace/{self.item.metadata.namespace}"
                 )
+
             else:
                 raise
         else:
             self.logging.info(
-                "deleted pod disruption budget/{} from namespace/{}".format(
-                    self.item.metadata.name, self.item.metadata.namespace
-                )
+                f"deleted pod disruption budget/{self.item.metadata.name} from namespace/{self.item.metadata.namespace}"
             )
 
     def ensure_pod_disruption_budget(
@@ -190,18 +187,16 @@ class DeploymentWrapper(Application):
                 # Deployment does not exist, nothing to delete but
                 # we can consider this a success.
                 self.logging.debug(
-                    "not deleting nonexistent deploy/{} from namespace/{}".format(
-                        self.item.metadata.name, self.item.metadata.namespace
-                    )
+                    f"not deleting nonexistent deploy/{self.item.metadata.name} from namespace/{self.item.metadata.namespace}"
                 )
+
             else:
                 raise
         else:
             self.logging.info(
-                "deleted deploy/{} from namespace/{}".format(
-                    self.item.metadata.name, self.item.metadata.namespace
-                )
+                f"deleted deploy/{self.item.metadata.name} from namespace/{self.item.metadata.namespace}"
             )
+
         self.delete_pod_disruption_budget(kube_client)
         self.delete_horizontal_pod_autoscaler(kube_client)
 
@@ -241,18 +236,16 @@ class DeploymentWrapper(Application):
                     # Deployment does not exist, nothing to delete but
                     # we can consider this a success.
                     self.logging.debug(
-                        "not deleting nonexistent deploy/{} from namespace/{}".format(
-                            self.kube_deployment.service, self.item.metadata.namespace
-                        )
+                        f"not deleting nonexistent deploy/{self.kube_deployment.service} from namespace/{self.item.metadata.namespace}"
                     )
+
                 else:
                     raise
         else:
             self.logging.info(
-                "deleted deploy/{} from namespace/{}".format(
-                    self.kube_deployment.service, self.item.metadata.namespace
-                )
+                f"deleted deploy/{self.kube_deployment.service} from namespace/{self.item.metadata.namespace}"
             )
+
         self.create(kube_client=kube_client)
 
     def update(self, kube_client: KubeClient) -> None:
@@ -348,9 +341,7 @@ class DeploymentWrapper(Application):
                 raise
         else:
             self.logging.info(
-                "deleted HPA/{} from namespace/{}".format(
-                    self.item.metadata.name, self.item.metadata.namespace
-                )
+                f"deleted HPA/{self.item.metadata.name} from namespace/{self.item.metadata.namespace}"
             )
 
 
@@ -372,18 +363,16 @@ class StatefulSetWrapper(Application):
                 # StatefulSet does not exist, nothing to delete but
                 # we can consider this a success.
                 self.logging.debug(
-                    "not deleting nonexistent statefulset/{} from namespace/{}".format(
-                        self.item.metadata.name, self.item.metadata.namespace
-                    )
+                    f"not deleting nonexistent statefulset/{self.item.metadata.name} from namespace/{self.item.metadata.namespace}"
                 )
+
             else:
                 raise
         else:
             self.logging.info(
-                "deleted statefulset/{} from namespace/{}".format(
-                    self.item.metadata.name, self.item.metadata.namespace
-                )
+                f"deleted statefulset/{self.item.metadata.name} from namespace/{self.item.metadata.namespace}"
             )
+
         self.delete_pod_disruption_budget(kube_client)
 
     def create(self, kube_client: KubeClient):

@@ -48,8 +48,7 @@ def parse_args():
         choices=["rfc1700", "yaml", "json"],
         default="rfc1700",
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def get_service_lines_for_service(service):
@@ -98,8 +97,7 @@ def write_yaml_file(filename):
 def maybe_load_previous_config(filename, config_loader):
     try:
         with open(filename, "r") as fp:
-            previous_config = config_loader(fp)
-            return previous_config
+            return config_loader(fp)
     except Exception:
         pass
     return None

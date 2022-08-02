@@ -323,7 +323,7 @@ def check_threshold(percent_used: float, threshold: int) -> bool:
 
 
 def percent_used(total: float, used: float) -> float:
-    return round(used / float(total) * 100.0, 2)
+    return round(used / total * 100.0, 2)
 
 
 def assert_cpu_health(
@@ -511,7 +511,7 @@ def assert_frameworks_exist(
         return HealthCheckResult(message="all expected frameworks found", healthy=ok)
     else:
         return HealthCheckResult(
-            message="CRITICAL: framework(s) %s not found" % ", ".join(not_found),
+            message=f'CRITICAL: framework(s) {", ".join(not_found)} not found',
             healthy=ok,
         )
 
@@ -816,7 +816,7 @@ def filter_slaves(
     """
     if filters is None:
         return slaves
-    return [s for s in slaves if all([f(s) for f in filters])]
+    return [s for s in slaves if all(f(s) for f in filters)]
 
 
 def get_resource_utilization_by_grouping(
@@ -885,11 +885,13 @@ def get_resource_utilization_by_grouping_kube(
 
     pods = get_all_pods_cached(kube_client)
 
-    pods_by_node = {}
-    for node in nodes:
-        pods_by_node[node.metadata.name] = [
+    pods_by_node = {
+        node.metadata.name: [
             pod for pod in pods if pod.spec.node_name == node.metadata.name
         ]
+        for node in nodes
+    }
+
     return {
         attribute_value: calculate_resource_utilization_for_kube_nodes(
             nodes, pods_by_node
@@ -1053,8 +1055,7 @@ def generate_summary_for_check(name, ok):
     a formatted message.
     """
     status = PaastaColors.green("OK") if ok is True else PaastaColors.red("CRITICAL")
-    summary = f"{name} Status: {status}"
-    return summary
+    return f"{name} Status: {status}"
 
 
 def status_for_results(healthcheck_results):

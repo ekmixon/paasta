@@ -173,19 +173,19 @@ def there_are_num_which_tasks(context, num, which, state, exact):
         )
         happy_count = len(happy_tasks)
         if state == "healthy":
-            if exact:
-                if happy_count == context.max_tasks:
-                    return
-            else:
-                if happy_count >= context.max_tasks:
-                    return
+            if (
+                exact
+                and happy_count == context.max_tasks
+                or not exact
+                and happy_count >= context.max_tasks
+            ):
+                return
         elif state == "unhealthy":
             if exact:
                 if len(app.tasks) - happy_count == context.max_tasks:
                     return
-            else:
-                if len(app.tasks) - happy_count >= context.max_tasks:
-                    return
+            elif len(app.tasks) - happy_count >= context.max_tasks:
+                return
         time.sleep(0.5)
     raise Exception(
         "timed out waiting for %d %s tasks on %s; there are %d"

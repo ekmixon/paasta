@@ -23,8 +23,7 @@ def main():
     for container in docker_client.containers():
         networks = container["NetworkSettings"]["Networks"]
         if "bridge" in networks:
-            ip = networks["bridge"]["IPAddress"]
-            if ip:
+            if ip := networks["bridge"]["IPAddress"]:
                 ip_to_containers[ip].append(container)
 
     output = []
@@ -32,10 +31,15 @@ def main():
         if len(containers) > 1:
             output.append(f"{ip} shared by the following containers:")
             for container in containers:
-                output.append("    Image: {}".format(container["Image"]))
-                output.append("        ID: {}".format(container["Id"]))
-                output.append("        State: {}".format(container["State"]))
-                output.append("        Status: {}".format(container["Status"]))
+                output.extend(
+                    (
+                        f'    Image: {container["Image"]}',
+                        f'        ID: {container["Id"]}',
+                        f'        State: {container["State"]}',
+                        f'        Status: {container["Status"]}',
+                    )
+                )
+
             output.append("")
 
     if output:

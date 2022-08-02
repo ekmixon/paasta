@@ -220,7 +220,7 @@ SIZE_PER_HISTORICAL_LOAD_RECORD = struct.calcsize(HISTORICAL_LOAD_SERIALIZATION_
 
 
 def zk_historical_load_path(zk_path_prefix):
-    return "%s/historical_load" % zk_path_prefix
+    return f"{zk_path_prefix}/historical_load"
 
 
 def save_historical_load(historical_load, zk_path_prefix):
@@ -248,18 +248,16 @@ def fetch_historical_load(zk_path_prefix):
 
 
 def deserialize_historical_load(historical_load_bytes):
-    historical_load = []
-
-    for pos in range(0, len(historical_load_bytes), SIZE_PER_HISTORICAL_LOAD_RECORD):
-        historical_load.append(
-            struct.unpack(
-                # unfortunately struct.unpack doesn't like kwargs.
-                HISTORICAL_LOAD_SERIALIZATION_FORMAT,
-                historical_load_bytes[pos : pos + SIZE_PER_HISTORICAL_LOAD_RECORD],
-            )
+    return [
+        struct.unpack(
+            # unfortunately struct.unpack doesn't like kwargs.
+            HISTORICAL_LOAD_SERIALIZATION_FORMAT,
+            historical_load_bytes[pos : pos + SIZE_PER_HISTORICAL_LOAD_RECORD],
         )
-
-    return historical_load
+        for pos in range(
+            0, len(historical_load_bytes), SIZE_PER_HISTORICAL_LOAD_RECORD
+        )
+    ]
 
 
 async def get_json_body_from_service(host, port, endpoint, session):
@@ -351,12 +349,9 @@ async def get_http_utilization_for_all_tasks(
 
     if not utilization:
         raise MetricsProviderNoDataError(
-            "Couldn't get any data from http endpoint {} for {}.{}".format(
-                endpoint,
-                marathon_service_config.service,
-                marathon_service_config.instance,
-            )
+            f"Couldn't get any data from http endpoint {endpoint} for {marathon_service_config.service}.{marathon_service_config.instance}"
         )
+
     return mean(utilization)
 
 
@@ -436,8 +431,8 @@ def mesos_cpu_metrics_provider(
         service=marathon_service_config.service,
         instance=marathon_service_config.instance,
     )
-    zk_last_time_path = "%s/cpu_last_time" % autoscaling_root
-    zk_last_cpu_data = "%s/cpu_data" % autoscaling_root
+    zk_last_time_path = f"{autoscaling_root}/cpu_last_time"
+    zk_last_cpu_data = f"{autoscaling_root}/cpu_data"
 
     with ZookeeperPool() as zk:
         try:
@@ -455,10 +450,7 @@ def mesos_cpu_metrics_provider(
         a_sync.block(asyncio.wait, futures, timeout=60)
 
     def results_or_None(fut):
-        if fut.exception():
-            return None
-        else:
-            return fut.result()
+        return None if fut.exception() else fut.result()
 
     mesos_tasks_stats = dict(
         zip(
@@ -493,7 +485,7 @@ def mesos_cpu_metrics_provider(
         with ZookeeperPool() as zk:
             zk.ensure_path(zk_last_cpu_data)
             zk.ensure_path(zk_last_time_path)
-            zk.set(zk_last_cpu_data, str(cpu_data_csv).encode("utf8"))
+            zk.set(zk_last_cpu_data, cpu_data_csv.encode("utf8"))
             zk.set(zk_last_time_path, str(current_time).encode("utf8"))
 
     utilization = {}
@@ -657,8 +649,8 @@ def autoscale_marathon_instance(
 ) -> None:
     try:
         with create_autoscaling_lock(
-            marathon_service_config.service, marathon_service_config.instance
-        ):
+                    marathon_service_config.service, marathon_service_config.instance
+                ):
             current_instances = marathon_service_config.get_instances()
             task_data_insufficient = is_task_data_insufficient(
                 marathon_service_config=marathon_service_config,
@@ -703,39 +695,38 @@ def autoscale_marathon_instance(
                 safe_downscaling_threshold=safe_downscaling_threshold,
                 task_data_insufficient=task_data_insufficient,
             )
-            if new_instance_count != current_instances:
-                if new_instance_count < current_instances and task_data_insufficient:
-                    write_to_log(
-                        config=marathon_service_config,
-                        line="Delaying scaling *down* as we found too few healthy tasks running in marathon. "
-                        "This can happen because tasks are delayed/waiting/unhealthy or because we are "
-                        "waiting for tasks to be killed. Will wait for sufficient healthy tasks before "
-                        "we make a decision to scale down.",
-                        level="debug",
-                    )
-                    return
-                else:
-                    set_instances_for_marathon_service(
-                        service=marathon_service_config.service,
-                        instance=marathon_service_config.instance,
-                        instance_count=new_instance_count,
-                    )
-                    write_to_log(
-                        config=marathon_service_config,
-                        line="Scaling from %d to %d instances (%s)"
-                        % (
-                            current_instances,
-                            new_instance_count,
-                            humanize_error(error),
-                        ),
-                        level="event",
-                    )
-            else:
+            if new_instance_count == current_instances:
                 write_to_log(
                     config=marathon_service_config,
                     line="Staying at %d instances (%s)"
                     % (current_instances, humanize_error(error)),
                     level="debug",
+                )
+            elif new_instance_count < current_instances and task_data_insufficient:
+                write_to_log(
+                    config=marathon_service_config,
+                    line="Delaying scaling *down* as we found too few healthy tasks running in marathon. "
+                    "This can happen because tasks are delayed/waiting/unhealthy or because we are "
+                    "waiting for tasks to be killed. Will wait for sufficient healthy tasks before "
+                    "we make a decision to scale down.",
+                    level="debug",
+                )
+                return
+            else:
+                set_instances_for_marathon_service(
+                    service=marathon_service_config.service,
+                    instance=marathon_service_config.instance,
+                    instance_count=new_instance_count,
+                )
+                write_to_log(
+                    config=marathon_service_config,
+                    line="Scaling from %d to %d instances (%s)"
+                    % (
+                        current_instances,
+                        new_instance_count,
+                        humanize_error(error),
+                    ),
+                    level="event",
                 )
     except LockHeldException:
         log.warning(
@@ -821,16 +812,18 @@ def get_configs_of_services_to_scale(
     configs = []
     for service in services:
         service_config = PaastaServiceConfigLoader(service=service, soa_dir=soa_dir)
-        for instance_config in service_config.instance_configs(
-            cluster=cluster, instance_type_class=MarathonServiceConfig
-        ):
+        configs.extend(
+            instance_config
+            for instance_config in service_config.instance_configs(
+                cluster=cluster, instance_type_class=MarathonServiceConfig
+            )
             if (
                 instance_config.get_max_instances()
                 and instance_config.get_desired_state() == "start"
                 and instance_config.get_autoscaling_params()["decision_policy"]
                 != "bespoke"
-            ):
-                configs.append(instance_config)
+            )
+        )
 
     return configs
 
@@ -844,11 +837,10 @@ def autoscaling_is_paused():
             pause_until = 0
 
     remaining = pause_until - time.time()
-    if remaining >= 0:
-        log.debug("Autoscaling is paused for {} more seconds".format(str(remaining)))
-        return True
-    else:
+    if remaining < 0:
         return False
+    log.debug(f"Autoscaling is paused for {str(remaining)} more seconds")
+    return True
 
 
 def autoscale_services(
@@ -894,9 +886,7 @@ def autoscale_service_configs(
                     mesos_tasks,
                 )
             except Exception as e:
-                write_to_log(
-                    config=config, line="Caught Exception %s" % e, level="debug"
-                )
+                write_to_log(config=config, line=f"Caught Exception {e}", level="debug")
 
 
 def filter_autoscaling_tasks(
@@ -924,7 +914,7 @@ def filter_autoscaling_tasks(
     # We assume tasks with no healthcheck results but a defined healthcheck to be unhealthy, unless they are "old" in
     # which case we assume that Marathon has screwed up and stopped healthchecking but that they are healthy.
 
-    log.info("Inspecting %s for autoscaling" % job_id_prefix)
+    log.info(f"Inspecting {job_id_prefix} for autoscaling")
 
     relevant_tasks_by_app: Dict[MarathonApp, List[MarathonTask]] = {
         app: app.tasks

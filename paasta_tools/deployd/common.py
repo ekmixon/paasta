@@ -78,7 +78,7 @@ def exponential_back_off(
     failures: int, factor: float, base: float, max_time: float
 ) -> float:
     seconds = factor * base ** failures
-    return seconds if seconds < max_time else max_time
+    return min(seconds, max_time)
 
 
 def get_service_instances_needing_update(
@@ -88,9 +88,10 @@ def get_service_instances_needing_update(
 ) -> List[Tuple[str, str, MarathonServiceConfig, str]]:
     marathon_apps = {}
     for marathon_client in marathon_clients.get_all_clients():
-        marathon_apps.update(
-            {app.id: app for app in get_all_marathon_apps(marathon_client)}
-        )
+        marathon_apps |= {
+            app.id: app for app in get_all_marathon_apps(marathon_client)
+        }
+
 
     marathon_app_ids = marathon_apps.keys()
     service_instances = []
@@ -103,13 +104,9 @@ def get_service_instances_needing_update(
                 soa_dir=DEFAULT_SOA_DIR,
             )
             config_app = config.format_marathon_app_dict()
-            app_id = "/{}".format(config_app["id"])
-        # Not ideal but we rely on a lot of user input to create the app dict
-        # and we really can't afford to bail if just one app definition is malformed
+            app_id = f'/{config_app["id"]}'
         except Exception as e:
-            print(
-                "ERROR: Skipping {}.{} because: '{}'".format(service, instance, str(e))
-            )
+            print(f"ERROR: Skipping {service}.{instance} because: '{str(e)}'")
             continue
         if (
             app_id not in marathon_app_ids
@@ -122,8 +119,7 @@ def get_service_instances_needing_update(
 def get_marathon_clients_from_config() -> MarathonClients:
     system_paasta_config = load_system_paasta_config()
     marathon_servers = get_marathon_servers(system_paasta_config)
-    marathon_clients = get_marathon_clients(marathon_servers)
-    return marathon_clients
+    return get_marathon_clients(marathon_servers)
 
 
 class DelayDeadlineQueueProtocol(Protocol):

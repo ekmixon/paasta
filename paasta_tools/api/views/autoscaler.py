@@ -59,9 +59,8 @@ def update_autoscaler_count(request):
     soa_dir = settings.soa_dir
     desired_instances = request.swagger_data.get("json_body")["desired_instances"]
     if not isinstance(desired_instances, int):
-        error_message = 'The provided body does not have an integer value for "desired_instances": {}'.format(
-            request.swagger_data.get("json_body")
-        )
+        error_message = f'The provided body does not have an integer value for "desired_instances": {request.swagger_data.get("json_body")}'
+
         raise ApiFailure(error_message, 500)
 
     instance_config = get_instance_config(service, instance, cluster, soa_dir, True)

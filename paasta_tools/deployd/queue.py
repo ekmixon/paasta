@@ -29,8 +29,8 @@ class ZKDelayDeadlineQueue(DelayDeadlineQueueProtocol):
         self.client = client
         self.id = uuid.uuid4().hex.encode()
 
-        self.locks_path = path + "/locks"
-        self.entries_path = path + "/entries"
+        self.locks_path = f"{path}/locks"
+        self.entries_path = f"{path}/entries"
         for path in (self.locks_path, self.entries_path):
             self.client.ensure_path(path)
 

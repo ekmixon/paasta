@@ -22,7 +22,7 @@ from paasta_tools.utils import _run
 @given('a "{service_type}" service')
 @given('an "{service_type}" service')
 def given_service(context, service_type):
-    context.service = "fake_%s_service" % service_type
+    context.service = f"fake_{service_type}_service"
     context.soa_dir = "fake_soa_configs_validate"
 
 

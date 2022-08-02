@@ -115,9 +115,12 @@ def get_matching_framework_info(min_hours):
 
 
 def format_framework(info):
-    result = [f'{info["name"]} (running for {info["time_running"]})']
-    result.append(f'  user: {info["user"]}')
-    result.append(f'  job UI: {info["webui_url"]}')
+    result = [
+        f'{info["name"]} (running for {info["time_running"]})',
+        f'  user: {info["user"]}',
+        f'  job UI: {info["webui_url"]}',
+    ]
+
     return "\n".join(result)
 
 

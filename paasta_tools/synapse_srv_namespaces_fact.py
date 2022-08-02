@@ -29,10 +29,12 @@ from paasta_tools import marathon_tools
 
 
 def main():
-    strings = []
-    for full_name, config in marathon_tools.get_all_namespaces():
-        if "proxy_port" in config:
-            strings.append("{}:{}".format(full_name, config["proxy_port"]))
+    strings = [
+        f'{full_name}:{config["proxy_port"]}'
+        for full_name, config in marathon_tools.get_all_namespaces()
+        if "proxy_port" in config
+    ]
+
     strings = sorted(strings)
     print("synapse_srv_namespaces=" + ",".join(strings))
     sys.exit(0)

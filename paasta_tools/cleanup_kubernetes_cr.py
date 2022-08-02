@@ -54,8 +54,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-c", "--cluster", default=None, help="Cluster to cleanup CRs for"
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def main() -> None:

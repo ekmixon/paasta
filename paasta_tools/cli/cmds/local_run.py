@@ -89,11 +89,10 @@ def perform_http_healthcheck(url, timeout):
             )
         )
         return (False, "http request succeeded, code %d" % res.status_code)
-    # check if response code is valid per https://mesosphere.github.io/marathon/docs/health-checks.html
     elif res.status_code >= 200 and res.status_code < 400:
         return (True, "http request succeeded, code %d" % res.status_code)
     else:
-        return (False, "http request failed, code %s" % str(res.status_code))
+        return False, f"http request failed, code {str(res.status_code)}"
 
 
 def perform_tcp_healthcheck(url, timeout):
@@ -126,10 +125,7 @@ def perform_cmd_healthcheck(docker_client, container_id, command, timeout):
     (output, return_code) = execute_in_container(
         docker_client, container_id, command, timeout
     )
-    if return_code == 0:
-        return (True, output)
-    else:
-        return (False, output)
+    return (True, output) if return_code == 0 else (False, output)
 
 
 def run_healthcheck_on_container(
@@ -148,7 +144,7 @@ def run_healthcheck_on_container(
         healthcheck_result = perform_cmd_healthcheck(
             docker_client, container_id, healthcheck_data, timeout
         )
-    elif healthcheck_mode == "http" or healthcheck_mode == "https":
+    elif healthcheck_mode in ["http", "https"]:
         healthcheck_result = perform_http_healthcheck(healthcheck_data, timeout)
     elif healthcheck_mode == "tcp":
         healthcheck_result = perform_tcp_healthcheck(healthcheck_data, timeout)
@@ -380,10 +376,11 @@ def add_subparser(subparsers):
     ).completer = lazy_choices_completer(list_instances)
     list_parser.add_argument(
         "--date",
-        default=datetime.datetime.today().strftime("%Y-%m-%d"),
+        default=datetime.datetime.now().strftime("%Y-%m-%d"),
         help="Date to use for interpolating date variables in a job. Defaults to use %(default)s.",
         type=parse_date,
     )
+
     list_parser.add_argument(
         "-v",
         "--verbose",
@@ -482,7 +479,7 @@ def add_subparser(subparsers):
 
 
 def get_container_name():
-    return "paasta_local_run_{}_{}".format(get_username(), randint(1, 999999))
+    return f"paasta_local_run_{get_username()}_{randint(1, 999999)}"
 
 
 def get_docker_run_cmd(
@@ -501,26 +498,22 @@ def get_docker_run_cmd(
 ):
     cmd = ["paasta_docker_wrapper", "run"]
     for k in env.keys():
-        cmd.append("--env")
-        cmd.append(f"{k}")
+        cmd.extend(("--env", f"{k}"))
     cmd.append("--memory=%dm" % memory)
-    for i in docker_params:
-        cmd.append(f"--{i['key']}={i['value']}")
+    cmd.extend(f"--{i['key']}={i['value']}" for i in docker_params)
     if net == "bridge" and container_port is not None:
         cmd.append("--publish=%d:%d" % (chosen_port, container_port))
     elif net == "host":
         cmd.append("--net=host")
-    cmd.append("--name=%s" % container_name)
-    for volume in volumes:
-        cmd.append("--volume=%s" % volume)
+    cmd.append(f"--name={container_name}")
+    cmd.extend(f"--volume={volume}" for volume in volumes)
     if interactive:
         cmd.append("--interactive=true")
         if sys.stdin.isatty():
             cmd.append("--tty=true")
-    else:
-        if detach:
-            cmd.append("--detach=true")
-    cmd.append("%s" % docker_hash)
+    elif detach:
+        cmd.append("--detach=true")
+    cmd.append(f"{docker_hash}")
     if command:
         if isinstance(command, str):
             cmd.extend(("sh", "-c", command))
@@ -539,16 +532,14 @@ def docker_pull_image(docker_url):
     we can use better credential management, but for now this function assumes the
     user running the command has already been authorized for the registry"""
     print(
-        "Please wait while the image (%s) is pulled (times out after 30m)..."
-        % docker_url,
+        f"Please wait while the image ({docker_url}) is pulled (times out after 30m)...",
         file=sys.stderr,
     )
+
     DEVNULL = open(os.devnull, "wb")
     with open("/tmp/paasta-local-run-pull.lock", "w") as f:
         with timed_flock(f, seconds=1800):
-            ret, output = _run(
-                "docker pull %s" % docker_url, stream=True, stdin=DEVNULL
-            )
+            ret, output = _run(f"docker pull {docker_url}", stream=True, stdin=DEVNULL)
             if ret != 0:
                 print(
                     "\nPull failed. Are you authorized to run docker commands?",
@@ -564,7 +555,7 @@ def get_container_id(docker_client, container_name):
     """
     containers = docker_client.containers(all=False)
     for container in containers:
-        if "/%s" % container_name in container.get("Names", []):
+        if f"/{container_name}" in container.get("Names", []):
             return container.get("Id")
     raise LostContainerException(
         "Can't find the container I just launched so I can't do anything else.\n"
@@ -611,11 +602,12 @@ def get_local_run_environment_vars(instance_config, port0, framework):
     env = {
         "HOST": hostname,
         "MESOS_SANDBOX": "/mnt/mesos/sandbox",
-        "MESOS_CONTAINER_NAME": "localrun-%s" % fake_taskid,
+        "MESOS_CONTAINER_NAME": f"localrun-{fake_taskid}",
         "MESOS_TASK_ID": str(fake_taskid),
         "PAASTA_DOCKER_IMAGE": docker_image,
         "PAASTA_LAUNCHED_BY": get_possible_launched_by_user_variable_from_env(),
     }
+
     if framework == "marathon":
         env["MARATHON_PORT"] = str(port0)
         env["MARATHON_PORT0"] = str(port0)
@@ -791,7 +783,7 @@ def run_docker_container(
             sys.exit(1)
         container_started = True
         container_id = get_container_id(docker_client, container_name)
-        print("Found our container running with CID %s" % container_id)
+        print(f"Found our container running with CID {container_id}")
 
         if simulate_healthcheck:
             healthcheck_result = simulate_healthcheck_on_service(
@@ -854,8 +846,7 @@ def format_command_for_type(command, instance_type, date):
     the command to be run.
     """
     if instance_type == "tron":
-        interpolated_command = parse_time_variables(command, date)
-        return interpolated_command
+        return parse_time_variables(command, date)
     else:
         return command
 
@@ -915,7 +906,7 @@ def configure_and_run_docker_container(
                 soa_dir=soa_dir,
             )
     except NoConfigurationForServiceError as e:
-        print(str(e), file=sys.stderr)
+        print(e, file=sys.stderr)
         return 1
     except NoDeploymentsAvailable:
         print(
@@ -970,31 +961,28 @@ def configure_and_run_docker_container(
     for volume in instance_config.get_volumes(system_paasta_config.get_volumes()):
         if os.path.exists(volume["hostPath"]):
             volumes.append(
-                "{}:{}:{}".format(
-                    volume["hostPath"], volume["containerPath"], volume["mode"].lower()
-                )
+                f'{volume["hostPath"]}:{volume["containerPath"]}:{volume["mode"].lower()}'
             )
+
         else:
             print(
                 PaastaColors.yellow(
-                    "Warning: Path %s does not exist on this host. Skipping this binding."
-                    % volume["hostPath"]
+                    f'Warning: Path {volume["hostPath"]} does not exist on this host. Skipping this binding.'
                 ),
                 file=sys.stderr,
             )
+
 
     if interactive is True and args.cmd is None:
         command = "bash"
     elif args.cmd:
         command = args.cmd
+    elif command_from_config := instance_config.get_cmd():
+        command = format_command_for_type(
+            command=command_from_config, instance_type=instance_type, date=args.date
+        )
     else:
-        command_from_config = instance_config.get_cmd()
-        if command_from_config:
-            command = format_command_for_type(
-                command=command_from_config, instance_type=instance_type, date=args.date
-            )
-        else:
-            command = instance_config.get_args()
+        command = instance_config.get_args()
 
     secret_provider_kwargs = {
         "vault_cluster_config": system_paasta_config.get_vault_cluster_config(),
@@ -1086,7 +1074,7 @@ def paasta_local_run(args):
     docker_url = None
 
     if args.action == "build":
-        default_tag = "paasta-local-run-{}-{}".format(service, get_username())
+        default_tag = f"paasta-local-run-{service}-{get_username()}"
         docker_url = os.environ.get("DOCKER_TAG", default_tag)
         os.environ["DOCKER_TAG"] = docker_url
         pull_image = False

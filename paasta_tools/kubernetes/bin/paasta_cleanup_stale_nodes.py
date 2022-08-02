@@ -50,8 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-n", "--dry-run", action="store_true", dest="dry_run", default=False
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def nodes_for_cleanup(ec2_client: Client, nodes: Sequence[V1Node]) -> List[V1Node]:
@@ -61,8 +60,7 @@ def nodes_for_cleanup(ec2_client: Client, nodes: Sequence[V1Node]) -> List[V1Nod
         if not is_node_ready(node)
         and "node-role.kubernetes.io/master" not in node.metadata.labels
     ]
-    terminated = terminated_nodes(ec2_client, not_ready)
-    return terminated
+    return terminated_nodes(ec2_client, not_ready)
 
 
 def terminated_nodes(ec2_client: Client, nodes: Sequence[V1Node]) -> List[V1Node]:
@@ -88,10 +86,7 @@ def does_instance_exist(ec2_client: Client, instance_id: str):
             # 'pending'|'running'|'shutting-down'|'terminated'|'stopping'|'stopped'
             # it's unlikely that we'll ever be in this situation with a pending node - the common case is that
             # the node is either running and been marked as not ready, or it's being shutdown
-            if status not in ("running", "pending"):
-                return False
-            return True
-
+            return status in ("running", "pending")
         log.debug(
             f"no instance status in response for {instance_id}; assuming to have been terminated"
         )

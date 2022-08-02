@@ -73,11 +73,10 @@ class DeprecatedAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         print(
             PaastaColors.red(
-                "Use of {} is deprecated. Please use {}=value in --spark-args.".format(
-                    option_string, deprecated_opts[option_string.strip("-")]
-                )
+                f'Use of {option_string} is deprecated. Please use {deprecated_opts[option_string.strip("-")]}=value in --spark-args.'
             )
         )
+
         sys.exit(1)
 
 
@@ -157,9 +156,10 @@ def add_subparser(subparsers):
     list_parser.add_argument(
         "-w",
         "--work-dir",
-        default="{}:{}".format(os.getcwd(), DEFAULT_SPARK_WORK_DIR),
+        default=f"{os.getcwd()}:{DEFAULT_SPARK_WORK_DIR}",
         help="The read-write volume to mount in format local_abs_dir:container_abs_dir",
     )
+
 
     list_parser.add_argument(
         "-y",
@@ -311,20 +311,22 @@ def sanitize_container_name(container_name):
 
 
 def get_docker_run_cmd(container_name, volumes, env, docker_img, docker_cmd, nvidia):
-    cmd = ["paasta_docker_wrapper", "run"]
-    cmd.append("--rm")
-    cmd.append("--net=host")
-
+    cmd = ["paasta_docker_wrapper", "run", "--rm", "--net=host"]
     sensitive_env = {}
 
     non_interactive_cmd = ["spark-submit", "history-server"]
-    if not any(c in docker_cmd for c in non_interactive_cmd):
+    if all(c not in docker_cmd for c in non_interactive_cmd):
         cmd.append("--interactive=true")
         if sys.stdout.isatty():
             cmd.append("--tty=true")
 
-    cmd.append("--user=%d:%d" % (os.geteuid(), os.getegid()))
-    cmd.append("--name=%s" % sanitize_container_name(container_name))
+    cmd.extend(
+        (
+            "--user=%d:%d" % (os.geteuid(), os.getegid()),
+            f"--name={sanitize_container_name(container_name)}",
+        )
+    )
+
     for k, v in env.items():
         cmd.append("--env")
         if k in SENSITIVE_ENV:
@@ -333,15 +335,10 @@ def get_docker_run_cmd(container_name, volumes, env, docker_img, docker_cmd, nvi
         else:
             cmd.append(f"{k}={v}")
     if nvidia:
-        cmd.append("--env")
-        cmd.append("NVIDIA_VISIBLE_DEVICES=all")
-        cmd.append("--runtime=nvidia")
-    for volume in volumes:
-        cmd.append("--volume=%s" % volume)
-    cmd.append("%s" % docker_img)
-    cmd.extend(("sh", "-c", docker_cmd))
-    cmd.append(sensitive_env)
-
+        cmd.extend(("--env", "NVIDIA_VISIBLE_DEVICES=all", "--runtime=nvidia"))
+    cmd.extend(f"--volume={volume}" for volume in volumes)
+    cmd.append(f"{docker_img}")
+    cmd.extend(("sh", "-c", docker_cmd, sensitive_env))
     return cmd
 
 
@@ -366,11 +363,14 @@ def get_docker_image(args, instance_config):
         )
         return None
     print(
-        "Please wait while the image (%s) is pulled (times out after 5m)..."
-        % docker_url,
+        f"Please wait while the image ({docker_url}) is pulled (times out after 5m)...",
         file=sys.stderr,
     )
-    retcode, _ = _run("sudo -H docker pull %s" % docker_url, stream=True, timeout=300)
+
+    retcode, _ = _run(
+        f"sudo -H docker pull {docker_url}", stream=True, timeout=300
+    )
+
     if retcode != 0:
         print(
             "\nPull failed. Are you authorized to run docker commands?",
@@ -456,10 +456,11 @@ def _parse_user_spark_args(spark_args: Optional[str]) -> Dict[str, str]:
         if len(fields) != 2:
             print(
                 PaastaColors.red(
-                    "Spark option %s is not in format option=value." % spark_arg
+                    f"Spark option {spark_arg} is not in format option=value."
                 ),
                 file=sys.stderr,
             )
+
             sys.exit(1)
         user_spark_opts[fields[0]] = fields[1]
     return user_spark_opts
@@ -467,17 +468,18 @@ def _parse_user_spark_args(spark_args: Optional[str]) -> Dict[str, str]:
 
 def create_spark_config_str(spark_config_dict, is_mrjob):
     conf_option = "--jobconf" if is_mrjob else "--conf"
-    spark_config_entries = list()
+    spark_config_entries = []
 
     if is_mrjob:
         spark_master = spark_config_dict["spark.master"]
         spark_config_entries.append(f"--spark-master={spark_master}")
 
-    for opt, val in spark_config_dict.items():
-        # mrjob use separate options to configure master
-        if is_mrjob and opt == "spark.master":
-            continue
-        spark_config_entries.append(f"{conf_option} {opt}={val}")
+    spark_config_entries.extend(
+        f"{conf_option} {opt}={val}"
+        for opt, val in spark_config_dict.items()
+        if not is_mrjob or opt != "spark.master"
+    )
+
     return " ".join(spark_config_entries)
 
 
@@ -517,7 +519,7 @@ def get_spark_app_name(original_docker_cmd: Union[Any, str, List[str]]) -> str:
             after_spark_submit = True
         elif after_spark_submit and arg.endswith(".py"):
             batch_name = arg.split("/")[-1].replace(".py", "")
-            spark_app_name = "paasta_" + batch_name
+            spark_app_name = f"paasta_{batch_name}"
             break
         elif arg == "jupyter-lab":
             spark_app_name = "paasta_jupyter"
@@ -545,7 +547,7 @@ def configure_and_run_docker_container(
         if spark_conf.get("spark.mesos.executor.docker.volumes", "") != ""
         else []
     )
-    volumes.append("%s:rw" % args.work_dir)
+    volumes.append(f"{args.work_dir}:rw")
     volumes.append("/nail/home:/nail/home:rw")
 
     environment = instance_config.get_env_dictionary()  # type: ignore
@@ -563,8 +565,7 @@ def configure_and_run_docker_container(
         signalfx_url = get_signalfx_url(spark_conf)
         print(f"\nSpark monitoring URL {webui_url}\n")
         print(f"\nSignalfx dashboard: {signalfx_url}\n")
-        history_server_url = get_history_url(spark_conf)
-        if history_server_url:
+        if history_server_url := get_history_url(spark_conf):
             print(
                 f"\nAfter the job is finished, you can find the spark UI from {history_server_url}\n"
             )
@@ -619,22 +620,17 @@ def get_docker_cmd(args, instance_config, spark_conf_str):
     original_docker_cmd = args.cmd or instance_config.get_cmd()
 
     if args.mrjob:
-        return original_docker_cmd + " " + spark_conf_str
-    # Default cli options to start the jupyter notebook server.
+        return f"{original_docker_cmd} {spark_conf_str}"
     elif original_docker_cmd == "jupyter-lab":
-        cull_opts = (
-            "--MappingKernelManager.cull_idle_timeout=%s " % args.cull_idle_timeout
-        )
+        cull_opts = f"--MappingKernelManager.cull_idle_timeout={args.cull_idle_timeout} "
+
         if args.not_cull_connected is False:
             cull_opts += "--MappingKernelManager.cull_connected=True "
 
-        return "SHELL=bash USER={} /source/virtualenv_run_jupyter/bin/jupyter-lab -y --ip={} {}".format(
-            get_username(), socket.getfqdn(), cull_opts
-        )
+        return f"SHELL=bash USER={get_username()} /source/virtualenv_run_jupyter/bin/jupyter-lab -y --ip={socket.getfqdn()} {cull_opts}"
+
     elif original_docker_cmd == "history-server":
         return "start-history-server.sh"
-    # Spark options are passed as options to pyspark and spark-shell.
-    # For jupyter, environment variable SPARK_OPTS is set instead.
     else:
         return inject_spark_conf_str(original_docker_cmd, spark_conf_str)
 
@@ -652,7 +648,7 @@ def build_and_push_docker_image(args):
         )
         return None
 
-    default_tag = "{}-{}".format(DEFAULT_SPARK_DOCKER_IMAGE_PREFIX, get_username())
+    default_tag = f"{DEFAULT_SPARK_DOCKER_IMAGE_PREFIX}-{get_username()}"
     docker_tag = os.environ.get("DOCKER_TAG", default_tag)
     os.environ["DOCKER_TAG"] = docker_tag
 
@@ -670,30 +666,28 @@ def build_and_push_docker_image(args):
         return None
 
     if args.docker_registry != DEFAULT_SPARK_DOCKER_REGISTRY:
-        command = "sudo -H docker push %s" % docker_url
+        command = f"sudo -H docker push {docker_url}"
     else:
-        command = "docker push %s" % docker_url
+        command = f"docker push {docker_url}"
 
     print(PaastaColors.grey(command))
     retcode, output = _run(command, stream=True)
-    if retcode != 0:
-        return None
-
-    return docker_url
+    return None if retcode != 0 else docker_url
 
 
 def validate_work_dir(s):
     dirs = s.split(":")
     if len(dirs) != 2:
         print(
-            "work-dir %s is not in format local_abs_dir:container_abs_dir" % s,
+            f"work-dir {s} is not in format local_abs_dir:container_abs_dir",
             file=sys.stderr,
         )
+
         sys.exit(1)
 
     for d in dirs:
         if not os.path.isabs(d):
-            print("%s is not an absolute path" % d, file=sys.stderr)
+            print(f"{d} is not an absolute path", file=sys.stderr)
             sys.exit(1)
 
 
@@ -734,7 +728,7 @@ def paasta_spark_run(args):
             soa_dir=args.yelpsoa_config_root,
         )
     except NoConfigurationForServiceError as e:
-        print(str(e), file=sys.stderr)
+        print(e, file=sys.stderr)
         return 1
     except NoDeploymentsAvailable:
         print(

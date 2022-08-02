@@ -44,16 +44,14 @@ def add_subparser(subparsers):
     ]:
         status_parser = subparsers.add_parser(
             command,
-            help="%ss a PaaSTA service in a graceful way." % upper,
-            description=(
-                "%ss a PaaSTA service in a graceful way. This uses the Git control plane."
-                % upper
-            ),
+            help=f"{upper}s a PaaSTA service in a graceful way.",
+            description=f"{upper}s a PaaSTA service in a graceful way. This uses the Git control plane.",
             epilog=(
                 "This command uses Git, and assumes access and authorization to the Git repo "
                 "for the service is available."
             ),
         )
+
         add_instance_filter_arguments(status_parser, verb=lower)
         status_parser.add_argument(
             "-d",
@@ -95,13 +93,8 @@ def make_mutate_refs_func(service_config, force_bounce, desired_state):
 def log_event(service_config, desired_state):
     user = utils.get_username()
     host = socket.getfqdn()
-    line = "Issued request to change state of {} (an instance of {}) to '{}' by {}@{}".format(
-        service_config.get_instance(),
-        service_config.get_service(),
-        desired_state,
-        user,
-        host,
-    )
+    line = f"Issued request to change state of {service_config.get_instance()} (an instance of {service_config.get_service()}) to '{desired_state}' by {user}@{host}"
+
     utils._log(
         service=service_config.get_service(),
         level="event",
@@ -202,10 +195,10 @@ def paasta_start_or_stop(args, desired_state):
         )
 
         for cluster, services_instances in pargs.items():
-            print("Cluster %s:" % cluster)
+            print(f"Cluster {cluster}:")
             for service, instances in services_instances.items():
-                print("    Service %s:" % service)
-                print("        Instances %s" % ",".join(instances.keys()))
+                print(f"    Service {service}:")
+                print(f'        Instances {",".join(instances.keys())}')
 
         if sys.stdin.isatty():
             confirm = choice.Binary("Are you sure you want to continue?", False).ask()
@@ -220,11 +213,12 @@ def paasta_start_or_stop(args, desired_state):
     marathon_message_printed = False
     affected_flinks = []
 
-    if args.clusters is None or args.instances is None:
-        if confirm_to_continue(pargs.items(), desired_state) is False:
-            print()
-            print("exiting")
-            return 1
+    if (
+        args.clusters is None or args.instances is None
+    ) and confirm_to_continue(pargs.items(), desired_state) is False:
+        print()
+        print("exiting")
+        return 1
 
     for cluster, services_instances in pargs.items():
         for service, instances in services_instances.items():

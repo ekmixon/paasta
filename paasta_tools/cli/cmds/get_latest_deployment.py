@@ -57,10 +57,12 @@ def paasta_get_latest_deployment(args):
     soa_dir = args.soa_dir
     validate_service_name(service, soa_dir)
 
-    git_sha = get_currently_deployed_sha(
+    if git_sha := get_currently_deployed_sha(
         service=service, deploy_group=deploy_group, soa_dir=soa_dir
-    )
-    if not git_sha:
+    ):
+        print(git_sha)
+        return 0
+    else:
         print(
             PaastaColors.red(
                 f"A deployment could not be found for {deploy_group} in {service}"
@@ -68,6 +70,3 @@ def paasta_get_latest_deployment(args):
             file=sys.stderr,
         )
         return 1
-    else:
-        print(git_sha)
-        return 0

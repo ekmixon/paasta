@@ -69,8 +69,7 @@ class StdoutKubeClient:
             body = kwargs.get("body")
             if not body:
                 return
-            ns = kwargs.get("namespace")
-            if ns:
+            if ns := kwargs.get("namespace"):
                 if "metadata" not in body:
                     body["metadata"] = {}
                 body["metadata"]["namespace"] = ns
@@ -113,8 +112,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-c", "--cluster", default=None, help="Cluster to setup CRs for"
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def main() -> None:
@@ -172,8 +170,11 @@ def setup_all_custom_resources(
         )
         config_dicts = {}
         for svc, raw_sdict in raw_config_dicts.items():
-            sdict = {inst: idict for inst, idict in raw_sdict.items() if inst[0] != "_"}
-            if sdict:
+            if sdict := {
+                inst: idict
+                for inst, idict in raw_sdict.items()
+                if inst[0] != "_"
+            }:
                 config_dicts[svc] = sdict
         if not config_dicts:
             continue
@@ -277,8 +278,7 @@ def format_custom_resource(
         "spec": instance_config,
     }
 
-    url = get_dashboard_base_url(kind, cluster)
-    if url:
+    if url := get_dashboard_base_url(kind, cluster):
         resource["metadata"]["annotations"][paasta_prefixed("dashboard_base_url")] = url
 
     config_hash = get_config_hash(resource)
@@ -341,7 +341,7 @@ def reconcile_kubernetes_resource(
                 name=formatted_resource["metadata"]["name"],
                 namespace=f"paasta-{kind.plural}",
             )
-            if not (service, inst, kind.singular) in [
+            if (service, inst, kind.singular) not in [
                 (c.service, c.instance, c.kind) for c in custom_resources
             ]:
                 log.info(f"{desired_resource} does not exist so creating")

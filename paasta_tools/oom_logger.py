@@ -102,16 +102,13 @@ def capture_oom_events_from_stdin():
             break
         if not syslog:
             break
-        r = process_name_regex.search(syslog)
-        if r:
-            process_name = r.group(1)
-        r = oom_regex_docker.search(syslog)
-        if r:
-            yield (int(r.group(1)), r.group(2), r.group(3), process_name)
+        if r := process_name_regex.search(syslog):
+            process_name = r[1]
+        if r := oom_regex_docker.search(syslog):
+            yield (int(r[1]), r[2], r[3], process_name)
             process_name = ""
-        r = oom_regex_kubernetes.search(syslog)
-        if r:
-            yield (int(r.group(1)), r.group(2), r.group(3), process_name)
+        if r := oom_regex_kubernetes.search(syslog):
+            yield (int(r[1]), r[2], r[3], process_name)
             process_name = ""
 
 
@@ -150,12 +147,13 @@ def log_to_clog(log_line):
 def log_to_paasta(log_line):
     """Add the event to the standard PaaSTA logging backend."""
     line = "oom-killer killed {} on {} (container_id: {}).".format(
-        "a %s process" % log_line.process_name
+        f"a {log_line.process_name} process"
         if log_line.process_name
         else "a process",
         log_line.hostname,
         log_line.container_id,
     )
+
     _log(
         service=log_line.service,
         instance=log_line.instance,

@@ -69,7 +69,7 @@ class CassandraClusterDeploymentConfig(LongRunningServiceConfig):
         To support apollo we always register in
         cassandra_<cluster>.main
         """
-        return "cassandra_" + self.get_instance()
+        return f"cassandra_{self.get_instance()}"
 
     def get_nerve_namespace(self) -> str:
         """
@@ -89,9 +89,9 @@ class CassandraClusterDeploymentConfig(LongRunningServiceConfig):
                 decompose_job_id(registration)
             except InvalidJobNameError:
                 log.error(
-                    "Provided registration {} for service "
-                    "{} is invalid".format(registration, self.service)
+                    f"Provided registration {registration} for service {self.service} is invalid"
                 )
+
 
         return registrations or [
             compose_job_id(self.get_service_name_smartstack(), "main")
@@ -129,12 +129,7 @@ class CassandraClusterDeploymentConfig(LongRunningServiceConfig):
             "deploy_group",
         ],
     ) -> List[str]:
-        # Use InstanceConfig to validate shared config keys like cpus and mem
-        # TODO: add mem back to this list once we fix PAASTA-15582 and
-        # move to using the same units as flink/marathon etc.
-        error_msgs = super().validate(params=params)
-
-        if error_msgs:
+        if error_msgs := super().validate(params=params):
             name = self.get_instance()
             return [f"{name}: {msg}" for msg in error_msgs]
         else:

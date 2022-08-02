@@ -39,9 +39,9 @@ def add_subparser(subparsers):
         "-i",
         "--print-instances",
         action="store_true",
-        help="Display all service%sinstance values, which only PaaSTA services have."
-        % SPACER,
+        help=f"Display all service{SPACER}instance values, which only PaaSTA services have.",
     )
+
     list_parser.add_argument(
         "-y",
         "--yelpsoa-config-root",

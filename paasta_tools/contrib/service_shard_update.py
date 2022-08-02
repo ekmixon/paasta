@@ -65,12 +65,11 @@ def parse_args():
 def get_default_git_remote():
     system_paasta_config = load_system_paasta_config()
     repo_config = system_paasta_config.get_git_repo_config("yelpsoa-configs")
-    default_git_remote = format_git_url(
+    return format_git_url(
         system_paasta_config.get_git_config()["git_user"],
         repo_config.get("git_server", DEFAULT_SOA_CONFIGS_GIT_URL),
         repo_config["repo_name"],
     )
-    return default_git_remote
 
 
 DEPLOY_MAPPINGS = {

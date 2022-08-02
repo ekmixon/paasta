@@ -82,10 +82,10 @@ class KubernetesVersionDict(TypedDict, total=False):
 
 
 def cr_id(service: str, instance: str, instance_type: str) -> Mapping[str, str]:
-    cr_id_fn = INSTANCE_TYPE_CR_ID.get(instance_type)
-    if not cr_id_fn:
+    if cr_id_fn := INSTANCE_TYPE_CR_ID.get(instance_type):
+        return cr_id_fn(service, instance)
+    else:
         raise RuntimeError(f"Unknown instance type {instance_type}")
-    return cr_id_fn(service, instance)
 
 
 def can_handle(instance_type: str) -> bool:
@@ -257,9 +257,7 @@ async def job_status(
         deploy_status
     )
     kstatus["deploy_status_message"] = message
-    kstatus["running_instance_count"] = (
-        app.status.ready_replicas if app.status.ready_replicas else 0
-    )
+    kstatus["running_instance_count"] = app.status.ready_replicas or 0
     kstatus["create_timestamp"] = app.metadata.creation_timestamp.timestamp()
     kstatus["namespace"] = app.metadata.namespace
 
@@ -393,10 +391,9 @@ def _build_smartstack_location_dict(
     )
 
     matched_backends_and_pods = match_backends_and_pods(sorted_backends, pods)
-    location_dict = smartstack_tools.build_smartstack_location_dict(
+    return smartstack_tools.build_smartstack_location_dict(
         location, matched_backends_and_pods, should_return_individual_backends
     )
-    return location_dict
 
 
 def cr_status(
@@ -424,7 +421,7 @@ def filter_actually_running_replicasets(
     return [
         rs
         for rs in replicaset_list
-        if not (rs.spec.replicas == 0 and ready_replicas_from_replicaset(rs) == 0)
+        if rs.spec.replicas != 0 or ready_replicas_from_replicaset(rs) != 0
     ]
 
 
@@ -453,9 +450,7 @@ def bounce_status(
         kube_client=kube_client,
         namespace=job_config.get_kubernetes_namespace(),
     )
-    status["running_instance_count"] = (
-        app.status.ready_replicas if app.status.ready_replicas else 0
-    )
+    status["running_instance_count"] = app.status.ready_replicas or 0
 
     deploy_status, message = kubernetes_tools.get_kubernetes_app_deploy_status(
         app=app,
@@ -689,11 +684,7 @@ async def get_pod_status(
         reason = sched_condition.reason
         message = sched_condition.message
 
-    mesh_ready = None
-    if backends is not None:
-        # TODO: Remove this once k8s readiness reflects mesh readiness, PAASTA-17266
-        mesh_ready = pod.status.pod_ip in backends
-
+    mesh_ready = pod.status.pod_ip in backends if backends is not None else None
     return {
         "name": pod.metadata.name,
         "ip": pod.status.pod_ip,
@@ -943,30 +934,26 @@ def kubernetes_status(
                 "error_message"
             ] = f"Unknown error occurred while fetching autoscaling status. Please contact #compute-infra for help: {e}"
 
-    evicted_count = 0
-    for pod in pod_list:
-        if pod.status.reason == "Evicted":
-            evicted_count += 1
+    evicted_count = sum(pod.status.reason == "Evicted" for pod in pod_list)
     kstatus["evicted_count"] = evicted_count
 
-    if include_smartstack or include_envoy:
+    if include_smartstack:
         service_namespace_config = kubernetes_tools.load_service_namespace_config(
             service=service,
             namespace=job_config.get_nerve_namespace(),
             soa_dir=settings.soa_dir,
         )
         if "proxy_port" in service_namespace_config:
-            if include_smartstack:
-                kstatus["smartstack"] = mesh_status(
-                    service=service,
-                    service_mesh=ServiceMesh.SMARTSTACK,
-                    instance=job_config.get_nerve_namespace(),
-                    job_config=job_config,
-                    service_namespace_config=service_namespace_config,
-                    pods=pod_list,
-                    should_return_individual_backends=verbose > 0,
-                    settings=settings,
-                )
+            kstatus["smartstack"] = mesh_status(
+                service=service,
+                service_mesh=ServiceMesh.SMARTSTACK,
+                instance=job_config.get_nerve_namespace(),
+                job_config=job_config,
+                service_namespace_config=service_namespace_config,
+                pods=pod_list,
+                should_return_individual_backends=verbose > 0,
+                settings=settings,
+            )
             if include_envoy:
                 kstatus["envoy"] = mesh_status(
                     service=service,
@@ -978,6 +965,23 @@ def kubernetes_status(
                     should_return_individual_backends=verbose > 0,
                     settings=settings,
                 )
+    elif include_envoy:
+        service_namespace_config = kubernetes_tools.load_service_namespace_config(
+            service=service,
+            namespace=job_config.get_nerve_namespace(),
+            soa_dir=settings.soa_dir,
+        )
+        if "proxy_port" in service_namespace_config:
+            kstatus["envoy"] = mesh_status(
+                service=service,
+                service_mesh=ServiceMesh.ENVOY,
+                instance=job_config.get_nerve_namespace(),
+                job_config=job_config,
+                service_namespace_config=service_namespace_config,
+                pods=pod_list,
+                should_return_individual_backends=verbose > 0,
+                settings=settings,
+            )
     return kstatus
 
 

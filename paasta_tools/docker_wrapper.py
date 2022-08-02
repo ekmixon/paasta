@@ -53,7 +53,7 @@ def parse_env_args(args):
         in_env = False
 
         if in_file:
-            result.update(read_env_file(arg))
+            result |= read_env_file(arg)
             in_file = False
             continue
 
@@ -86,8 +86,7 @@ def can_add_hostname(args):
     if is_network_host(args):
         return False
 
-    for index, arg in enumerate(args):
-
+    for arg in args:
         # Check for --hostname and variants
         if arg == "-h":
             return False
@@ -129,18 +128,13 @@ def can_add_mac_address(args):
     if is_network_host(args) or not is_run(args):
         return False
 
-    for index, arg in enumerate(args):
-        # Check for --mac-address
-        if arg.startswith("--mac-address"):
-            return False
-
-    return True
+    return not any(arg.startswith("--mac-address") for arg in args)
 
 
 def generate_hostname_task_id(hostname, mesos_task_id):
     task_id = mesos_task_id.rpartition(".")[2]
 
-    hostname_task_id = hostname + "-" + task_id
+    hostname_task_id = f"{hostname}-{task_id}"
 
     # hostnames can only contain alphanumerics and dashes and must be no more
     # than 60 characters
@@ -173,16 +167,14 @@ def get_cpumap():
     try:
         with open("/proc/cpuinfo", "r") as f:
             for line in f:
-                m = re.match(r"physical\sid.*(\d)", line)
-                if m:
-                    cpuid = int(m.group(1))
+                if m := re.match(r"physical\sid.*(\d)", line):
+                    cpuid = int(m[1])
                     if cpuid not in cpumap:
                         cpumap[cpuid] = []
                     cpumap[cpuid].append(core)
                     core += 1
     except IOError:
         logging.warning("Error while trying to read cpuinfo")
-        pass
     return cpumap
 
 
@@ -192,30 +184,25 @@ def get_numa_memsize(nb_nodes):
     try:
         with open("/proc/meminfo", "r") as f:
             for line in f:
-                m = re.match(r"MemTotal:\s*(\d+)\skB", line)
-                if m:
-                    return int(m.group(1)) / 1024 / int(nb_nodes)
+                if m := re.match(r"MemTotal:\s*(\d+)\skB", line):
+                    return int(m[1]) / 1024 / int(nb_nodes)
     except IOError:
         logging.warning("Error while trying to read meminfo")
-        pass
     return 0
 
 
 def arg_collision(new_args, current_args):
     # Returns True if one of the new arguments is already in the
     # current argument list.
-    cur_arg_keys = []
-    for c in current_args:
-        cur_arg_keys.append(c.split("=")[0])
+    cur_arg_keys = [c.split("=")[0] for c in current_args]
     return bool(set(new_args).intersection(set(cur_arg_keys)))
 
 
 def is_numa_enabled():
     if os.path.exists("/proc/1/numa_maps"):
         return True
-    else:
-        logging.warning("The system does not support NUMA")
-        return False
+    logging.warning("The system does not support NUMA")
+    return False
 
 
 def get_cpu_requirements(env_args):
@@ -224,10 +211,9 @@ def get_cpu_requirements(env_args):
         return float(env_args.get("MARATHON_APP_RESOURCE_CPUS"))
     except (ValueError, TypeError):
         logging.warning(
-            "Could not read {} as a float".format(
-                env_args.get("MARATHON_APP_RESOURCE_CPUS")
-            )
+            f'Could not read {env_args.get("MARATHON_APP_RESOURCE_CPUS")} as a float'
         )
+
         return 0.0
 
 
@@ -237,10 +223,9 @@ def get_mem_requirements(env_args):
         return float(env_args.get("MARATHON_APP_RESOURCE_MEM"))
     except (ValueError, TypeError):
         logging.warning(
-            "Could not read {} as a float".format(
-                env_args.get("MARATHON_APP_RESOURCE_MEM")
-            )
+            f'Could not read {env_args.get("MARATHON_APP_RESOURCE_MEM")} as a float'
         )
+
         return 0.0
 
 
@@ -252,10 +237,9 @@ def append_cpuset_args(argv, env_args):
         pinned_numa_node = int(env_args.get("PIN_TO_NUMA_NODE"))
     except (ValueError, TypeError):
         logging.error(
-            "Could not read PIN_TO_NUMA_NODE value as an int: {}".format(
-                env_args.get("PIN_TO_NUMA_NODE")
-            )
+            f'Could not read PIN_TO_NUMA_NODE value as an int: {env_args.get("PIN_TO_NUMA_NODE")}'
         )
+
         return argv
 
     cpumap = get_cpumap()
@@ -265,10 +249,9 @@ def append_cpuset_args(argv, env_args):
         return argv
     if pinned_numa_node not in cpumap:
         logging.error(
-            "Specified NUMA node: {} does not exist on this system".format(
-                pinned_numa_node
-            )
+            f"Specified NUMA node: {pinned_numa_node} does not exist on this system"
         )
+
         return argv
     if arg_collision(["--cpuset-cpus", "--cpuset-mems"], argv):
         logging.error("--cpuset options are already set. Not overriding")
@@ -281,17 +264,16 @@ def append_cpuset_args(argv, env_args):
         return argv
     if get_numa_memsize(len(cpumap)) <= get_mem_requirements(env_args):
         logging.error(
-            "Requested memory:{} MB does not fit in one NUMA node: {} MB".format(
-                get_mem_requirements(env_args), get_numa_memsize(len(cpumap))
-            )
+            f"Requested memory:{get_mem_requirements(env_args)} MB does not fit in one NUMA node: {get_numa_memsize(len(cpumap))} MB"
         )
+
         return argv
 
     logging.info(f"Binding container to NUMA node {pinned_numa_node}")
     argv = add_argument(
         argv, ("--cpuset-cpus=" + ",".join(str(c) for c in cpumap[pinned_numa_node]))
     )
-    argv = add_argument(argv, ("--cpuset-mems=" + str(pinned_numa_node)))
+    argv = add_argument(argv, f"--cpuset-mems={pinned_numa_node}")
     return argv
 
 

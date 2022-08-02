@@ -44,8 +44,8 @@ async def get_spool(spool_url: str) -> SpoolInfo:
     # TODO: aiohttp says not to create a session per request. Fix this.
     async with aiohttp.ClientSession(timeout=HACHECK_TIMEOUT) as session:
         async with session.get(
-            spool_url, headers={"User-Agent": get_user_agent()}
-        ) as response:
+                    spool_url, headers={"User-Agent": get_user_agent()}
+                ) as response:
             if response.status == 200:
                 return {"state": "up"}
 
@@ -64,9 +64,11 @@ async def get_spool(spool_url: str) -> SpoolInfo:
             response_text = await response.text()
             match = re.match(regex, response_text)
             groupdict = match.groupdict()
-            info: SpoolInfo = {}
-            info["service"] = groupdict["service"]
-            info["state"] = groupdict["state"]
+            info: SpoolInfo = {
+                "service": groupdict["service"],
+                "state": groupdict["state"],
+            }
+
             if "since" in groupdict:
                 info["since"] = float(groupdict["since"] or 0)
             if "until" in groupdict:

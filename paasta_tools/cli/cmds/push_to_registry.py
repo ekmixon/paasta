@@ -91,8 +91,7 @@ def build_command(upstream_job_name, upstream_git_commit):
     # service so we could validate it, but the Docker image will have the full
     # name with 'services-' so add it back.
     tag = build_docker_tag(upstream_job_name, upstream_git_commit)
-    cmd = f"docker push {tag}"
-    return cmd
+    return f"docker push {tag}"
 
 
 def paasta_push_to_registry(args):
@@ -130,12 +129,11 @@ def paasta_push_to_registry(args):
         loglevel="debug",
     )
     if returncode != 0:
-        loglines.append("ERROR: Failed to promote image for %s." % args.commit)
-        output = get_jenkins_build_output_url()
-        if output:
-            loglines.append("See output: %s" % output)
+        loglines.append(f"ERROR: Failed to promote image for {args.commit}.")
+        if output := get_jenkins_build_output_url():
+            loglines.append(f"See output: {output}")
     else:
-        loglines.append("Successfully pushed image for %s to registry" % args.commit)
+        loglines.append(f"Successfully pushed image for {args.commit} to registry")
         _log_audit(
             action="push-to-registry",
             action_details={"commit": args.commit},
@@ -179,7 +177,7 @@ def is_docker_image_already_in_registry(service, soa_dir, sha):
 
     with requests.Session() as s:
         try:
-            url = "https://" + uri
+            url = f"https://{uri}"
             r = (
                 s.head(url, timeout=30)
                 if creds[0] is None
@@ -189,7 +187,7 @@ def is_docker_image_already_in_registry(service, soa_dir, sha):
             # If no auth creds, fallback to trying http
             if creds[0] is not None:
                 raise
-            url = "http://" + uri
+            url = f"http://{uri}"
             r = s.head(url, timeout=30)
 
         if r.status_code == 200:

@@ -59,7 +59,7 @@ class ServiceGroup(collections.namedtuple("ServiceGroup", ("service", "instance"
         bit. To attempt to ensure we don't have collisions due to shortening,
         we append a hash to the end.
         """
-        chain = "PAASTA.{}".format(self.service[:10])
+        chain = f"PAASTA.{self.service[:10]}"
         chain += "." + hashlib.sha256(json.dumps(self).encode("utf8")).hexdigest()[:10]
         assert len(chain) <= 28, len(chain)
         return chain
@@ -82,7 +82,7 @@ class ServiceGroup(collections.namedtuple("ServiceGroup", ("service", "instance"
             # for several minutes after the directory disappears from soa-configs.
             return ()
 
-        rules = list()
+        rules = []
 
         if conf.get_inbound_firewall():
             rules.extend(_inbound_traffic_rule(conf, self.service, self.instance))
@@ -168,11 +168,8 @@ def _well_known_rules(conf):
 def _synapse_backends(synapse_service_dir, namespace):
     # Return the contents of the synapse JSON file for a particular service namespace
     # e.g. /var/run/synapse/services/example_happyhour.main.json
-    with open(
-        os.path.join(synapse_service_dir, namespace + ".json")
-    ) as synapse_backend_file:
-        synapse_backend_json = json.load(synapse_backend_file)
-        return synapse_backend_json
+    with open(os.path.join(synapse_service_dir, f"{namespace}.json")) as synapse_backend_file:
+        return json.load(synapse_backend_file)
 
 
 def _yocalhost_rule(port, comment, protocol="tcp"):
@@ -243,20 +240,21 @@ def _smartstack_rules(conf, soa_dir, synapse_service_dir):
             yield iptables.Rule(
                 protocol="tcp",
                 src="0.0.0.0/0.0.0.0",
-                dst="{}/255.255.255.255".format(backend["host"]),
+                dst=f'{backend["host"]}/255.255.255.255',
                 target="ACCEPT",
                 matches=(
-                    ("comment", (("comment", ("backend " + namespace,)),)),
+                    ("comment", (("comment", (f"backend {namespace}",)),)),
                     ("tcp", (("dport", (str(backend["port"]),)),)),
                 ),
                 target_parameters=(),
             )
 
+
         # synapse-haproxy proxy_port
         service, _ = namespace.split(".", 1)
         service_namespaces = get_all_namespaces_for_service(service, soa_dir=soa_dir)
         port = dict(service_namespaces)[namespace]["proxy_port"]
-        yield _yocalhost_rule(port, "proxy_port " + namespace)
+        yield _yocalhost_rule(port, f"proxy_port {namespace}")
 
 
 def _ports_valid(ports):
@@ -270,8 +268,7 @@ def _ports_valid(ports):
         if not 1 <= port <= 65535:
             log.error(f"Bogus port number: {port}")
             return False
-    else:
-        return True
+    return True
 
 
 def _cidr_rules(conf):

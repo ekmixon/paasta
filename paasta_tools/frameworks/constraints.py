@@ -58,21 +58,16 @@ def check_offer_constraints(offer, constraints, state):
         try:
             offer_attr = next((x for x in offer.attributes if x.name == attr), None)
             if offer_attr is None:
-                print("Attribute not found for a constraint: %s" % attr)
+                print(f"Attribute not found for a constraint: {attr}")
                 return False
             elif not (CONS_OPS[op](val, offer_attr.text.value, offer_attr.name, state)):
                 print(
-                    "Constraint not satisfied: [{} {} {}] for {} with {}".format(
-                        attr, op, val, offer_attr.text.value, state
-                    )
+                    f"Constraint not satisfied: [{attr} {op} {val}] for {offer_attr.text.value} with {state}"
                 )
+
                 return False
         except Exception as err:
-            print(
-                "Error while matching constraint: [{} {} {}] {}".format(
-                    attr, op, val, str(err)
-                )
-            )
+            print(f"Error while matching constraint: [{attr} {op} {val}] {str(err)}")
             raise err
 
     return True

@@ -42,11 +42,7 @@ def stream(fn, elements, workers):
     jobs = []
 
     with execute(workers) as executor:
-        for elem in elements:
-            jobs.append(executor.submit(fn, elem))
-
+        jobs.extend(executor.submit(fn, elem) for elem in elements)
         for job in concurrent.futures.as_completed(jobs):
-            try:
+            with contextlib.suppress(exceptions.SkipResult):
                 yield job.result()
-            except exceptions.SkipResult:
-                pass

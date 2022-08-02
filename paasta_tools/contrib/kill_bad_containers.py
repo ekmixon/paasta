@@ -18,12 +18,10 @@ def get_container_from_dport(dport, docker_client):
         try:
             ports = container["Ports"]
             for port in ports:
-                if "PublicPort" in port:
-                    if port["PublicPort"] == int(dport):
-                        return container
+                if "PublicPort" in port and port["PublicPort"] == int(dport):
+                    return container
         except KeyError:
             print(ports)
-            pass
 
 
 def target_rule_to_dport(rule):
@@ -83,7 +81,7 @@ def kill_containers_with_duplicate_iptables_rules(docker_client):
                 print("Deleting both iptables rules")
                 chain.delete_rule(iptables_rule)
                 chain.delete_rule(raw_rules_seen[target])
-            elif container1["Id"] != container2["Id"]:
+            else:
                 print(
                     "These are two different containers, which means we have duplicate ips:"
                 )
@@ -95,9 +93,6 @@ def kill_containers_with_duplicate_iptables_rules(docker_client):
                 print("Deleting the both iptables rules for good measure")
                 chain.delete_rule(iptables_rule)
                 chain.delete_rule(raw_rules_seen[target])
-            else:
-                print("Something unexpected went wrong. Exiting 1")
-                sys.exit(1)
 
 
 def main():

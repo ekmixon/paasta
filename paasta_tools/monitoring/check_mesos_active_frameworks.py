@@ -44,12 +44,12 @@ def check_mesos_active_frameworks() -> None:
     try:
         state = block(master.state)
     except MasterNotAvailableException as e:
-        print("CRITICAL: %s" % e.args[0])
+        print(f"CRITICAL: {e.args[0]}")
         sys.exit(2)
 
     result = assert_frameworks_exist(state, expected)
     if result.healthy:
-        print("OK: " + result.message)
+        print(f"OK: {result.message}")
         sys.exit(0)
     else:
         print(result.message)

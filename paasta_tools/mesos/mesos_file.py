@@ -28,11 +28,7 @@ class File:
         self.task = task
         self.path = path
 
-        if self.task is None:
-            self._host_path = self.path
-        else:
-            self._host_path = None  # Defer until later (_fetch) so we don't make HTTP requests in __init__.
-
+        self._host_path = self.path if self.task is None else None
         self._offset = 0
 
         # Used during fetch, class level so the dict isn't constantly alloc'd
@@ -55,7 +51,7 @@ class File:
         return f"{self._where}:{self.path}"
 
     def key(self):
-        return "{}:{}".format(self.host.key(), self._host_path)
+        return f"{self.host.key()}:{self._host_path}"
 
     @property
     def _where(self):
@@ -152,7 +148,7 @@ class File:
 
             # This is not streaming and assumes small chunk sizes
             blob_lines = (last + blob).split("\n")
-            for line in blob_lines[: len(blob_lines) - 1]:
+            for line in blob_lines[:-1]:
                 yield line
 
             last = blob_lines[-1]

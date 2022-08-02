@@ -49,17 +49,15 @@ def parse_args():
         dest="disable_reservation_cleanup",
         default=False,
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def cleanup_forgotten_draining():
     """Clean up hosts forgotten draining"""
     log.debug("Cleaning up hosts forgotten draining")
-    hosts_forgotten_draining = get_hosts_forgotten_draining(
+    if hosts_forgotten_draining := get_hosts_forgotten_draining(
         grace=seconds_to_nanoseconds(10 * 60)
-    )
-    if hosts_forgotten_draining:
+    ):
         undrain(hostnames=hosts_forgotten_draining)
     else:
         log.debug("No hosts forgotten draining")
@@ -68,10 +66,9 @@ def cleanup_forgotten_draining():
 def cleanup_forgotten_down():
     """Clean up hosts forgotten down"""
     log.debug("Cleaning up hosts forgotten down")
-    hosts_forgotten_down = get_hosts_forgotten_down(
+    if hosts_forgotten_down := get_hosts_forgotten_down(
         grace=seconds_to_nanoseconds(10 * 60)
-    )
-    if hosts_forgotten_down:
+    ):
         up(hostnames=hosts_forgotten_down)
     else:
         log.debug("No hosts forgotten down")
@@ -83,8 +80,7 @@ def unreserve_all_resources_on_non_draining_hosts():
     slaves = get_slaves()
     hostnames = [slave["hostname"] for slave in slaves]
     draining_hosts = get_draining_hosts()
-    non_draining_hosts = list(set(hostnames) - set(draining_hosts))
-    if non_draining_hosts:
+    if non_draining_hosts := list(set(hostnames) - set(draining_hosts)):
         unreserve_all_resources(hostnames=non_draining_hosts)
     else:
         log.debug("No non-draining hosts")
@@ -93,8 +89,7 @@ def unreserve_all_resources_on_non_draining_hosts():
 def reserve_all_resources_on_draining_hosts():
     """Reserve all resources on draining hosts"""
     log.debug("Reserving all resources on draining hosts")
-    draining_hosts = get_draining_hosts()
-    if draining_hosts:
+    if draining_hosts := get_draining_hosts():
         reserve_all_resources(hostnames=draining_hosts)
     else:
         log.debug("No draining hosts")

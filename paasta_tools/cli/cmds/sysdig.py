@@ -65,7 +65,7 @@ def get_status_for_instance(cluster, service, instance):
 def get_any_mesos_master(cluster, system_paasta_config):
     masters, output = calculate_remote_masters(cluster, system_paasta_config)
     if not masters:
-        print("ERROR: %s" % output)
+        print(f"ERROR: {output}")
         sys.exit(1)
     mesos_master, output = find_connectable_master(masters)
     if not mesos_master:
@@ -92,7 +92,7 @@ def paasta_sysdig(args):
             print(output)
             sys.exit(return_code)
         slave, command = output.split(":", 1)
-        subprocess.call(shlex.split("ssh -tA {} '{}'".format(slave, command.strip())))
+        subprocess.call(shlex.split(f"ssh -tA {slave} '{command.strip()}'"))
         return
     status = get_status_for_instance(
         cluster=args.cluster, service=args.service, instance=args.instance
@@ -115,10 +115,9 @@ def paasta_sysdig(args):
     mesos_url = get_mesos_master().host
     marathon_parsed_url = urlparse(marathon_url)
     marathon_creds_url = marathon_parsed_url._replace(
-        netloc="{}:{}@{}".format(
-            marathon_user, marathon_pass, marathon_parsed_url.netloc
-        )
+        netloc=f"{marathon_user}:{marathon_pass}@{marathon_parsed_url.netloc}"
     )
+
     print(
         format_mesos_command(
             slave, status.marathon.app_id, mesos_url, marathon_creds_url.geturl()
@@ -131,4 +130,4 @@ def format_mesos_command(slave, app_id, mesos_url, marathon_url):
     command = (
         f'sudo csysdig -m {sysdig_mesos} marathon.app.id="/{app_id}" -v mesos_tasks'
     )
-    return slave + ":" + command
+    return f"{slave}:{command}"

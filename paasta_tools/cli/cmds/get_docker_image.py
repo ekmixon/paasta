@@ -59,9 +59,14 @@ def paasta_get_docker_image(args):
     validate_service_name(service, soa_dir)
 
     deployments = load_v2_deployments_json(service=service, soa_dir=soa_dir)
-    docker_image = deployments.get_docker_image_for_deploy_group(deploy_group)
-
-    if not docker_image:
+    if docker_image := deployments.get_docker_image_for_deploy_group(
+        deploy_group
+    ):
+        registry_uri = get_service_docker_registry(service=service, soa_dir=soa_dir)
+        docker_url = f"{registry_uri}/{docker_image}"
+        print(docker_url)
+        return 0
+    else:
         print(
             PaastaColors.red(
                 f"There is no {service} docker_image for {deploy_group}. Has it been deployed yet?"
@@ -69,8 +74,3 @@ def paasta_get_docker_image(args):
             file=sys.stderr,
         )
         return 1
-    else:
-        registry_uri = get_service_docker_registry(service=service, soa_dir=soa_dir)
-        docker_url = f"{registry_uri}/{docker_image}"
-        print(docker_url)
-        return 0
